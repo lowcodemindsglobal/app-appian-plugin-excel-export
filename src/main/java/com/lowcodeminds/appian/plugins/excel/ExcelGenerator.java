@@ -31,8 +31,15 @@ import java.util.Map;
 public final class ExcelGenerator {
 
   private static final Logger LOG = LoggerFactory.getLogger(ExcelGenerator.class);
+
+  // Number of rows SXSSFWorkbook keeps in memory at once before flushing older
+  // rows to a temp file on disk. Lower = less memory, more disk I/O.
   private static final int ROW_ACCESS_WINDOW_SIZE = 100;
+
   private static final String SHEET_NAME = "Export";
+
+  // POI column widths are in units of 1/256th of a character width, so 5000
+  // is roughly 19-20 characters wide - a reasonable default for most columns.
   private static final int DEFAULT_COLUMN_WIDTH = 5000;
 
   private final ColumnProtectionConfig config;

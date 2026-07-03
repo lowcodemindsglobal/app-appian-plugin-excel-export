@@ -5,6 +5,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Immutable settings for one Excel export: which columns exist, which of those
+ * stay editable, and where the generated file gets saved. Built via
+ * {@link #builder()} rather than a public constructor so every required field
+ * is checked (including the editable/all-columns cross-check) before an
+ * instance can exist.
+ */
 public final class ColumnProtectionConfig {
 
   private final List<String> allColumns;
@@ -41,6 +48,11 @@ public final class ColumnProtectionConfig {
     return targetFolderId;
   }
 
+  /**
+   * @return true if this column should be left unlocked (editable) in the
+   *     generated sheet; false if it should be locked, including for any
+   *     column name not found in {@link #getAllColumns()} at all.
+   */
   public boolean isEditable(String columnName) {
     return editableColumns.contains(columnName);
   }
@@ -84,6 +96,13 @@ public final class ColumnProtectionConfig {
       return this;
     }
 
+    /**
+     * @throws NullPointerException if a required field was never set
+     * @throws IllegalArgumentException if editableColumns contains a name
+     *     that isn't in allColumns - this is also checked earlier, at design
+     *     time, by ExcelExportSmartService.validate(), so reaching this
+     *     exception at run() time should be rare in practice.
+     */
     public ColumnProtectionConfig build() {
       Objects.requireNonNull(allColumns, "allColumns must not be null");
       Objects.requireNonNull(editableColumns, "editableColumns must not be null");

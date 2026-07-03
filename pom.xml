@@ -12,12 +12,40 @@
   <name>Appian Smart Service - Excel Export with Column-Level Protection</name>
 
   <properties>
-    <maven.compiler.source>11</maven.compiler.source>
-    <maven.compiler.target>11</maven.compiler.target>
+    <!--
+      Superseded by <release>11</release> on maven-compiler-plugin below.
+      Left here (commented out, not deleted) rather than removed outright:
+      source/target only gate language syntax and bytecode version, not which
+      JDK API methods are callable, so they don't catch accidental use of a
+      post-11 API when building with a newer JDK (this project builds with
+      JDK 17). <release> checks against the real Java 11 API surface instead.
+    -->
+    <!-- <maven.compiler.source>11</maven.compiler.source> -->
+    <!-- <maven.compiler.target>11</maven.compiler.target> -->
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <poi.version>5.2.5</poi.version>
     <junit.version>5.10.2</junit.version>
-    <slf4j.version>1.7.36</slf4j.version>
+    <!--
+      dataRows is accepted as a JSON string (not a native "List of Dictionary"
+      input - see ExcelExportSmartService's class Javadoc for why) and parsed
+      with Jackson. Relocated in the shade config below, same reasoning as
+      Apache POI: Appian's server very likely bundles its own Jackson version
+      internally, so an unrelocated copy risks the same classpath-conflict
+      failure mode the Technical Design Report calls out for POI.
+    -->
+    <jackson.version>2.18.2</jackson.version>
+    <!--
+      SLF4J API, scope "provided" - Appian's application server supplies the
+      actual logging backend and routes it into Appian's own logs, so the
+      plugin must not bundle its own logging implementation.
+
+      Not log4j: confirmed against lowcodemindsglobal/appian-header-match-plugin,
+      a real, successfully deployed sibling plug-in from this org, which depends
+      on slf4j-api (provided) and its maven-enforcer-plugin actively BANS log4j
+      (log4j:log4j:* and org.apache.logging.log4j:log4j:1.*) as a dependency -
+      see the enforcer plugin below, which mirrors that same ban.
+    -->
+    <slf4j.version>2.0.16</slf4j.version>
     <!--
       appian-plugin-sdk is installed locally from lib/appian-plug-in-sdk.jar via:
       mvn install:install-file -Dfile=lib/appian-plug-in-sdk.jar \
@@ -53,6 +81,13 @@
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>
       <version>${slf4j.version}</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
     </dependency>
 
     <dependency>
@@ -71,8 +106,17 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.13.0</version>
         <configuration>
-          <source>11</source>
-          <target>11</target>
+          <!--
+            source/target commented out (not deleted) in favor of release
+            below: release compiles against the actual Java 11 API surface
+            via javac's release flag, so an accidental call to a
+            post-11-only API method fails the build instead of compiling
+            clean under a newer JDK (this project builds with JDK 17) and
+            only failing at deploy time on Appian's actual Java 11 runtime.
+          -->
+          <!-- <source>11</source> -->
+          <!-- <target>11</target> -->
+          <release>11</release>
         </configuration>
       </plugin>
 
@@ -96,6 +140,13 @@
               <goal>shade</goal>
             </goals>
             <configuration>
+              <!--
+                Don't emit dependency-reduced-pom.xml into the project root -
+                confirmed against lowcodemindsglobal/appian-header-match-plugin,
+                which sets this same flag instead of gitignoring the generated
+                file after the fact (which is what this project did before).
+              -->
+              <createDependencyReducedPom>false</createDependencyReducedPom>
               <relocations>
                 <relocation>
                   <pattern>org.apache.poi</pattern>
@@ -108,6 +159,10 @@
                 <relocation>
                   <pattern>org.openxmlformats</pattern>
                   <shadedPattern>com.lowcodeminds.appian.plugins.excel.shaded.openxmlformats</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.fasterxml.jackson</pattern>
+                  <shadedPattern>com.lowcodeminds.appian.plugins.excel.shaded.jackson</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
@@ -123,6 +178,73 @@
             </configuration>
           </execution>
         </executions>
+      </plugin>
+
+      <!--
+        Appian's plugin development best practices call for CVE scanning of
+        third-party libraries (Apache POI here). Not bound to a lifecycle phase
+        on purpose - it needs network access to refresh the vulnerability
+        database, which would otherwise slow down or break every offline build.
+        Run it explicitly: mvn dependency-check:check
+      -->
+      <plugin>
+        <groupId>org.owasp</groupId>
+        <artifactId>dependency-check-maven</artifactId>
+        <version>10.0.4</version>
+        <configuration>
+          <failBuildOnCVSS>7</failBuildOnCVSS>
+        </configuration>
+      </plugin>
+
+      <!--
+        Fails the build if a banned dependency shows up anywhere in the
+        (transitive) dependency tree. Mirrors the same rule from
+        lowcodemindsglobal/appian-header-match-plugin, a real, successfully
+        deployed sibling plug-in from this org: log4j is banned (this plugin
+        logs via SLF4J instead, which Appian's app server supplies a binding
+        for), alongside other libraries known to conflict with or duplicate
+        what Appian's runtime already provides.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <id>enforce</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireUpperBoundDeps/>
+                <bannedDependencies>
+                  <searchTransitive>true</searchTransitive>
+                  <excludes>
+                    <exclude>log4j:log4j:*</exclude>
+                    <exclude>org.apache.logging.log4j:log4j:1.*</exclude>
+                    <exclude>io.netty:*</exclude>
+                    <exclude>org.eclipse.jetty:*</exclude>
+                    <exclude>junit:junit:4.*</exclude>
+                  </excludes>
+                </bannedDependencies>
+              </rules>
+              <fail>true</fail>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!--
+        Reports outdated dependency versions. Run manually: mvn versions:display-dependency-updates
+      -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>versions-maven-plugin</artifactId>
+        <version>2.17.0</version>
+        <configuration>
+          <generateBackupPoms>false</generateBackupPoms>
+        </configuration>
       </plugin>
     </plugins>
   </build>

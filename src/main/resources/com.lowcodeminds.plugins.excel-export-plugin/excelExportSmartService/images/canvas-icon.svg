@@ -1,0 +1,15 @@
+<!--
+  Placeholder canvas icon - replace with real branded artwork before release.
+  Required size per Appian docs: 60x40 px. The leading <?xml ...?> declaration
+  must NOT be present, or the icon fails to render on the process diagram canvas.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40" viewBox="0 0 60 40">
+  <rect x="2" y="2" width="56" height="36" rx="3" fill="#1D6F42" stroke="#14502F" stroke-width="1.5"/>
+  <line x1="2" y1="14" x2="58" y2="14" stroke="#FFFFFF" stroke-width="1.5"/>
+  <line x1="2" y1="26" x2="58" y2="26" stroke="#FFFFFF" stroke-width="1.5"/>
+  <line x1="20" y1="2" x2="20" y2="38" stroke="#FFFFFF" stroke-width="1.5"/>
+  <line x1="39" y1="2" x2="39" y2="38" stroke="#FFFFFF" stroke-width="1.5"/>
+  <!-- small padlock glyph over the bottom-right cell to hint at "protection" -->
+  <rect x="43" y="28" width="9" height="7" rx="1" fill="#FFFFFF"/>
+  <path d="M45 28 v-2 a2.5 2.5 0 0 1 5 0 v2" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+</svg>
