@@ -65,3 +65,5 @@ config.properties
 *.temp
 *.bak
 *.backup
+
+.claude/

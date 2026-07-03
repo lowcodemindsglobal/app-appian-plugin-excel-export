@@ -228,7 +228,11 @@ public class ExcelExportSmartService extends AppianSmartService {
     document.setParent(config.getTargetFolderId());
     document.setExtension(XLSX_EXTENSION);
 
-    Long newDocumentId = contentService.create(document, ContentConstants.UNIQUE_NONE);
+    // UNIQUE_FOR_PARENT: only reject a name that collides with a sibling in
+    // the same target folder. UNIQUE_NONE was tried first and rejected names
+    // that didn't exist anywhere in that folder - it appears to fall back to
+    // a broader (likely system-wide) uniqueness check instead of "no check".
+    Long newDocumentId = contentService.create(document, ContentConstants.UNIQUE_FOR_PARENT);
     document.setId(newDocumentId);
 
     try (ContentOutputStream contentOutputStream = contentService.upload(document, ContentConstants.VERSION_CURRENT)) {

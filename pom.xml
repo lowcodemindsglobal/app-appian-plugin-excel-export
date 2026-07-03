@@ -147,18 +147,30 @@
                 file after the fact (which is what this project did before).
               -->
               <createDependencyReducedPom>false</createDependencyReducedPom>
+              <!--
+                org.apache.xmlbeans and org.openxmlformats are deliberately NOT
+                relocated, even though that reintroduces some classpath-conflict
+                risk with any xmlbeans/openxmlformats version Appian bundles
+                internally. Relocating them broke at runtime with:
+                  "XmlComplexContentImpl cannot be cast to CTWorkbook"
+                Root cause: XMLBeans generates a binary schema type system
+                (.xsb resources bundled in the POI/xmlbeans jars) that hard-codes
+                each schema interface's implementation class by fully-qualified
+                name as embedded binary data, not plain bytecode references.
+                Shade rewrites .class bytecode correctly but cannot safely rewrite
+                that embedded binary data (the relocated names are a different
+                length, corrupting the encoding), so at runtime XMLBeans can't
+                find the relocated impl class and falls back to a generic
+                XmlComplexContentImpl - which then fails every cast to a CT*
+                interface. This is a documented, known pitfall of shading POI,
+                not specific to this project. org.apache.poi itself has no such
+                embedded-binary-schema issue (plain compiled Java) and stays
+                relocated below.
+              -->
               <relocations>
                 <relocation>
                   <pattern>org.apache.poi</pattern>
                   <shadedPattern>com.lowcodeminds.appian.plugins.excel.shaded.poi</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.apache.xmlbeans</pattern>
-                  <shadedPattern>com.lowcodeminds.appian.plugins.excel.shaded.xmlbeans</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>org.openxmlformats</pattern>
-                  <shadedPattern>com.lowcodeminds.appian.plugins.excel.shaded.openxmlformats</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.fasterxml.jackson</pattern>
