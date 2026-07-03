@@ -10,6 +10,7 @@ import com.appiancorp.suiteapi.content.exceptions.DuplicateUuidException;
 import com.appiancorp.suiteapi.content.exceptions.InsufficientNameUniquenessException;
 import com.appiancorp.suiteapi.content.exceptions.InvalidContentException;
 import com.appiancorp.suiteapi.knowledge.Document;
+import com.appiancorp.suiteapi.knowledge.FolderDataType;
 import com.appiancorp.suiteapi.process.exceptions.SmartServiceException;
 import com.appiancorp.suiteapi.process.framework.AppianSmartService;
 import com.appiancorp.suiteapi.process.framework.Input;
@@ -61,7 +62,7 @@ import java.util.Map;
  */
 @AutomationSmartServicesDocumentGeneration
 @Unattended
-@Order({"dataRowsJson", "allColumns", "editableColumns", "targetFolderId", "fileName", "protectionPassword", "documentId"})
+@Order({"dataRowsJson", "allColumns", "editableColumns", "targetFolderId", "targetFolder", "fileName", "protectionPassword", "documentId"})
 public class ExcelExportSmartService extends AppianSmartService {
 
   private static final Logger LOG = LoggerFactory.getLogger(ExcelExportSmartService.class);
@@ -77,6 +78,7 @@ public class ExcelExportSmartService extends AppianSmartService {
   private String[] allColumns;
   private String[] editableColumns;
   private Long targetFolderId;
+  private Long targetFolder;
   private String fileName;
   private String protectionPassword;
 
@@ -105,10 +107,23 @@ public class ExcelExportSmartService extends AppianSmartService {
     this.editableColumns = editableColumns;
   }
 
-  @Input(required = Required.ALWAYS)
+  // Two alternate ways to specify the destination folder: a plain numeric ID,
+  // or - via @FolderDataType, which tells Appian this Long is a folder
+  // reference (system type "CollaborationFolder") - a folder-picker control
+  // in the Process Modeler. Both are optional individually, but validate()
+  // below requires that at least one of them be supplied; if both are, run()
+  // prefers targetFolder since it comes from the picker and can't be typoed.
+  @Input(required = Required.OPTIONAL)
   @Name("targetFolderId")
   public void setTargetFolderId(Long targetFolderId) {
     this.targetFolderId = targetFolderId;
+  }
+
+  @Input(required = Required.OPTIONAL)
+  @Name("targetFolder")
+  @FolderDataType
+  public void setTargetFolder(Long targetFolder) {
+    this.targetFolder = targetFolder;
   }
 
   @Input(required = Required.ALWAYS)
@@ -145,6 +160,10 @@ public class ExcelExportSmartService extends AppianSmartService {
   public void validate(MessageContainer messages) {
     super.validate(messages);
 
+    if (targetFolderId == null && targetFolder == null) {
+      messages.addError("targetFolder", "Either \"Target Folder ID\" or \"Target Folder\" must be provided.");
+    }
+
     if (allColumns == null || editableColumns == null) {
       // Required-input validation (missing/blank values) is already handled
       // by the framework via @Input(required = Required.ALWAYS); nothing
@@ -162,6 +181,11 @@ public class ExcelExportSmartService extends AppianSmartService {
 
   @Override
   public void run() throws SmartServiceException {
+    // targetFolder (picker) takes precedence over targetFolderId (typed
+    // value) when both are supplied; validate() already guarantees at least
+    // one of them is present.
+    Long effectiveTargetFolderId = targetFolder != null ? targetFolder : targetFolderId;
+
     ColumnProtectionConfig config;
     try {
       config = ColumnProtectionConfig.builder()
@@ -169,7 +193,7 @@ public class ExcelExportSmartService extends AppianSmartService {
           .editableColumns(editableColumns != null ? Arrays.asList(editableColumns) : Collections.emptyList())
           .protectionPassword(protectionPassword)
           .fileName(fileName)
-          .targetFolderId(targetFolderId)
+          .targetFolderId(effectiveTargetFolderId)
           .build();
     } catch (IllegalArgumentException | NullPointerException e) {
       // IllegalArgumentException: editableColumns has a name not present in

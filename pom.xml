@@ -6,7 +6,7 @@
 
   <groupId>com.lowcodeminds.appian.plugins</groupId>
   <artifactId>excel-export-plugin</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.0.1-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>Appian Smart Service - Excel Export with Column-Level Protection</name>

@@ -21,7 +21,7 @@ mvn clean package
 ```
 
 Produces the deployable shaded JAR at
-`target/excel-export-plugin-1.0.0-SNAPSHOT.jar` (POI and Jackson are both
+`target/excel-export-plugin-1.0.1-SNAPSHOT.jar` (POI and Jackson are both
 relocated to `com.lowcodeminds.appian.plugins.excel.shaded.*` to avoid
 classpath conflicts with whatever versions of those libraries Appian's own
 server bundles internally).
@@ -74,9 +74,9 @@ they show up anywhere in the dependency tree, transitively or not.
 ```
 src/main/resources/
   appian-plugin.xml                                        # plug-in descriptor, JAR root
-  com/lowcodeminds/plugins/excel-export-plugin/
+  com/lowcodeminds/plugins/excel-export-plugin-v2/
     excelExportSmartService.properties                      # i18n: labels, tooltips (no locale suffix - see file header comment)
-  com.lowcodeminds.plugins.excel-export-plugin/
+  com.lowcodeminds.plugins.excel-export-plugin-v2/
     excelExportSmartService/images/
       palette-icon.svg                                      # 27x19, placeholder artwork
       canvas-icon.svg                                        # 60x40, placeholder artwork
@@ -84,7 +84,7 @@ src/main/resources/
 
 ## Deploy
 
-1. Upload `target/excel-export-plugin-1.0.0-SNAPSHOT.jar` via the Appian
+1. Upload `target/excel-export-plugin-1.0.1-SNAPSHOT.jar` via the Appian
    Admin Console (Plug-ins section).
 2. Confirm the "Excel Export with Protection" node appears in the Process
    Model Designer's palette, under Automation Smart Services > Document

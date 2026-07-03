@@ -18,12 +18,12 @@
   remove or rename them, so processes already using this node keep working.
 -->
 <appian-plugin name="Excel Export with Protection"
-               key="com.lowcodeminds.plugins.excel-export-plugin">
+               key="com.lowcodeminds.plugins.excel-export-plugin-v2">
 
   <plugin-info>
     <description>Exports Appian data rows to a column-protected Excel (.xlsx) document.</description>
     <vendor name="LowCodeMinds" url="https://www.lowcodeminds.com"/>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <!--
       application-version's "min" attribute (minimum supported Appian version) is
       left unset on purpose: the target environment was only confirmed as
