@@ -252,15 +252,17 @@ public class ExcelExportSmartService extends AppianSmartService {
     document.setParent(config.getTargetFolderId());
     document.setExtension(XLSX_EXTENSION);
 
-    // UNIQUE_FOR_PARENT: only reject a name that collides with a sibling in
-    // the same target folder. UNIQUE_NONE was tried first and rejected names
-    // that didn't exist anywhere in that folder - it appears to fall back to
-    // a broader (likely system-wide) uniqueness check instead of "no check".
-    Long newDocumentId = contentService.create(document, ContentConstants.UNIQUE_FOR_PARENT);
-    document.setId(newDocumentId);
-
-    try (ContentOutputStream contentOutputStream = contentService.upload(document, ContentConstants.VERSION_CURRENT)) {
+    // upload() alone both creates the content item and gives back a stream to
+    // write its bytes to - it must not be preceded by a separate create()
+    // call. An earlier version of this method called create() first (with
+    // UNIQUE_FOR_PARENT) and then upload() (with VERSION_CURRENT) on the same
+    // Document; upload() runs its own name-uniqueness check independently of
+    // create(), so it saw the document create() had just made as a colliding
+    // sibling and failed with InsufficientNameUniquenessException every time.
+    Long newDocumentId;
+    try (ContentOutputStream contentOutputStream = contentService.upload(document, ContentConstants.UNIQUE_FOR_PARENT)) {
       contentOutputStream.write(excelBytes);
+      newDocumentId = contentOutputStream.getContentId();
     }
     return newDocumentId;
   }
