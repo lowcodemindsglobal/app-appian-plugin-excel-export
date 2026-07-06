@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Plug-in descriptor for the Appian plug-in framework.
+
+  Packaged at the JAR ROOT (this file lives at src/main/resources/appian-plugin.xml,
+  which Maven copies straight to the root of target/classes and, from there, to the
+  root of the built JAR) - Appian's documented plug-in project structure requires
+  appian-plugin.xml at the JAR root, not under META-INF.
+  Reference: https://docs.appian.com/suite/help/26.6/Custom_Smart_Service_Plug-ins.html
+
+  Root element is <appian-plugin>, not <plugin> as the docs page above literally
+  shows - confirmed against lowcodemindsglobal/appian-header-match-plugin, a real,
+  successfully deployed sibling plug-in from this org, which uses <appian-plugin>.
+
+  IMPORTANT: "key" below is a permanent identifier. Once this plug-in is deployed
+  anywhere, never change it - Appian best practice is to deprecate old smart
+  services (move them to the "Deprecated Services" palette category) rather than
+  remove or rename them, so processes already using this node keep working.
+-->
+<appian-plugin name="Excel Export with Protection"
+               key="com.lowcodeminds.plugins.excel-export-plugin-v2">
+
+  <plugin-info>
+    <description>Exports Appian data rows to a column-protected Excel (.xlsx) document.</description>
+    <vendor name="LowCodeMinds" url="https://www.lowcodeminds.com"/>
+    <version>1.0.1</version>
+    <!--
+      application-version's "min" attribute (minimum supported Appian version) is
+      left unset on purpose: the target environment was only confirmed as
+      "Appian version greater than 25", not a specific release number. Fill this
+      in once the exact minimum supported version is known, e.g.:
+      <application-version min="25.1"/>
+    -->
+  </plugin-info>
+
+  <!--
+    ContentService is injected into ExcelExportSmartService's constructor
+    automatically by the Appian plug-in framework, which recognizes constructor
+    parameters typed as public *Service interfaces - no manual wiring belongs here.
+  -->
+  <smart-service name="Excel Export with Protection"
+                 key="excelExportSmartService"
+                 class="com.lowcodeminds.appian.plugins.excel.ExcelExportSmartService"/>
+
+</appian-plugin>
