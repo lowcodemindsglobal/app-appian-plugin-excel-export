@@ -1,74 +1,86 @@
 package com.lowcodeminds.appian.plugins.excel;
 
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
+import org.apache.poi.openxml4j.opc.OPCPackage;
+import org.apache.poi.poifs.crypt.EncryptionInfo;
+import org.apache.poi.poifs.crypt.EncryptionMode;
+import org.apache.poi.poifs.crypt.Encryptor;
+import org.apache.poi.poifs.filesystem.POIFSFileSystem;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.FillPatternType;
 import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.IndexedColors;
 import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTSheetProtection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.awt.Color;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.reflect.Field;
-import java.util.Date;
+import java.security.GeneralSecurityException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Types;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Generates a column-protected .xlsx workbook from row data.
+ * Generates a multi-sheet, column-protected .xlsx workbook by running one SQL
+ * query per sheet against a shared JDBC connection.
  *
  * Uses SXSSFWorkbook (streaming) so memory stays flat regardless of row count -
- * required to support the 50,000-row target without OutOfMemoryError.
+ * the row access window below keeps only the most recent rows in memory per
+ * sheet, flushing older ones to a temp file automatically.
  */
 public final class ExcelGenerator {
 
   private static final Logger LOG = LoggerFactory.getLogger(ExcelGenerator.class);
 
-  // Number of rows SXSSFWorkbook keeps in memory at once before flushing older
-  // rows to a temp file on disk. Lower = less memory, more disk I/O.
   private static final int ROW_ACCESS_WINDOW_SIZE = 100;
-
-  private static final String SHEET_NAME = "Export";
+  private static final int FETCH_SIZE = 100;
 
   // POI column widths are in units of 1/256th of a character width, so 5000
   // is roughly 19-20 characters wide - a reasonable default for most columns.
   private static final int DEFAULT_COLUMN_WIDTH = 5000;
 
-  private final ColumnProtectionConfig config;
+  // Default header fill when NoneEditableHeaderColor isn't supplied. Editable
+  // column headers always use the darker shade below - there's no separate
+  // input to override that side, only the non-editable one.
+  private static final short DEFAULT_NON_EDITABLE_HEADER_COLOR = IndexedColors.GREY_25_PERCENT.getIndex();
+  private static final short EDITABLE_HEADER_COLOR = IndexedColors.GREY_50_PERCENT.getIndex();
 
-  public ExcelGenerator(ColumnProtectionConfig config) {
+  private final ExcelExportConfig config;
+
+  public ExcelGenerator(ExcelExportConfig config) {
     this.config = config;
   }
 
-  public byte[] generate(List<Map<String, Object>> dataRows) {
+  /**
+   * Runs each entry in {@code sheets} as a query against {@code connection} and
+   * writes its results into its own sheet, in order.
+   */
+  public byte[] generate(Connection connection, List<SQLSheetData> sheets) throws SQLException {
     SXSSFWorkbook workbook = new SXSSFWorkbook(ROW_ACCESS_WINDOW_SIZE);
     try {
-      SXSSFSheet sheet = workbook.createSheet(SHEET_NAME);
-      sheet.trackAllColumnsForAutoSizing();
+      CellStyle nonEditableHeaderStyle = createNonEditableHeaderStyle(workbook);
+      CellStyle editableHeaderStyle = createHeaderStyle(workbook, EDITABLE_HEADER_COLOR);
+      DataStyles dataStyles = new DataStyles(workbook, config.getDateFormat(), config.getDateTimeFormat());
 
-      CellStyle lockedStyle = createLockedStyle(workbook);
-      CellStyle unlockedStyle = createUnlockedStyle(workbook);
-      CellStyle headerStyle = createHeaderStyle(workbook);
-
-      List<String> columns = config.getAllColumns();
-      writeHeaderRow(sheet, columns, headerStyle);
-      writeDataRows(sheet, columns, dataRows, lockedStyle, unlockedStyle);
-
-      for (int i = 0; i < columns.size(); i++) {
-        sheet.setColumnWidth(i, DEFAULT_COLUMN_WIDTH);
+      for (SQLSheetData sheetData : sheets) {
+        writeSheet(workbook, connection, sheetData, nonEditableHeaderStyle, editableHeaderStyle, dataStyles);
       }
-
-      // Protection must be applied after all cells are written -
-      // applying it earlier can interfere with cell writes.
-      protectSheet(sheet);
 
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       workbook.write(out);
@@ -86,64 +98,187 @@ public final class ExcelGenerator {
     }
   }
 
-  private CellStyle createLockedStyle(Workbook workbook) {
+  /**
+   * Encrypts an already-generated .xlsx file so a password is required to open it,
+   * via Apache POI's standard agile-encryption re-wrap: the plain OOXML package is
+   * read back and re-saved into an encrypted POIFS container.
+   */
+  public static byte[] encrypt(byte[] xlsxBytes, String password) throws IOException, GeneralSecurityException, InvalidFormatException {
+    POIFSFileSystem fileSystem = new POIFSFileSystem();
+    EncryptionInfo encryptionInfo = new EncryptionInfo(EncryptionMode.agile);
+    Encryptor encryptor = encryptionInfo.getEncryptor();
+    encryptor.confirmPassword(password);
+
+    try (OPCPackage opcPackage = OPCPackage.open(new ByteArrayInputStream(xlsxBytes));
+        OutputStream encryptedStream = encryptor.getDataStream(fileSystem)) {
+      opcPackage.save(encryptedStream);
+    }
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    fileSystem.writeFilesystem(out);
+    return out.toByteArray();
+  }
+
+  private void writeSheet(SXSSFWorkbook workbook, Connection connection, SQLSheetData sheetData,
+      CellStyle nonEditableHeaderStyle, CellStyle editableHeaderStyle, DataStyles dataStyles) throws SQLException {
+    String sheetName = sheetData.getSheetName();
+    LOG.debug("Start processing sheet: {}", sheetName);
+
+    try (PreparedStatement statement = connection.prepareStatement(sheetData.getSqlQuery())) {
+      statement.setFetchSize(FETCH_SIZE);
+      try (ResultSet resultSet = statement.executeQuery()) {
+        ResultSetMetaData metadata = resultSet.getMetaData();
+        int columnCount = metadata.getColumnCount();
+
+        String[] columnLabels = new String[columnCount];
+        boolean[] editableFlags = new boolean[columnCount];
+        for (int i = 0; i < columnCount; i++) {
+          columnLabels[i] = metadata.getColumnLabel(i + 1);
+          editableFlags[i] = config.isEditable(columnLabels[i]);
+        }
+
+        SXSSFSheet sheet = workbook.createSheet(sheetName);
+        writeHeaderRow(sheet, columnLabels, editableFlags, nonEditableHeaderStyle, editableHeaderStyle);
+        writeDataRows(sheet, resultSet, metadata, columnCount, editableFlags, dataStyles);
+
+        for (int i = 0; i < columnCount; i++) {
+          sheet.setColumnWidth(i, DEFAULT_COLUMN_WIDTH);
+        }
+
+        // Protection must be applied after all cells are written -
+        // applying it earlier can interfere with cell writes.
+        protectSheet(sheet);
+        LOG.info("Completed processing sheet: {}", sheetName);
+      }
+    } catch (SQLException e) {
+      throw new SQLException("Error processing sheet '" + sheetName + "': " + e.getMessage(), e);
+    }
+  }
+
+  private void writeHeaderRow(SXSSFSheet sheet, String[] columnLabels, boolean[] editableFlags,
+      CellStyle nonEditableHeaderStyle, CellStyle editableHeaderStyle) {
+    Row headerRow = sheet.createRow(0);
+    for (int c = 0; c < columnLabels.length; c++) {
+      Cell cell = headerRow.createCell(c);
+      cell.setCellValue(columnLabels[c]);
+      cell.setCellStyle(editableFlags[c] ? editableHeaderStyle : nonEditableHeaderStyle);
+    }
+  }
+
+  private void writeDataRows(SXSSFSheet sheet, ResultSet resultSet, ResultSetMetaData metadata, int columnCount,
+      boolean[] editableFlags, DataStyles dataStyles) throws SQLException {
+    int rowIndex = 1;
+    while (resultSet.next()) {
+      Row row = sheet.createRow(rowIndex);
+      for (int c = 0; c < columnCount; c++) {
+        int col = c + 1;
+        Cell cell = row.createCell(c);
+        setCellValue(cell, resultSet, metadata.getColumnType(col), col);
+        cell.setCellStyle(dataStyles.styleFor(metadata.getColumnType(col), editableFlags[c]));
+      }
+      rowIndex++;
+    }
+  }
+
+  private void setCellValue(Cell cell, ResultSet resultSet, int columnType, int col) throws SQLException {
+    switch (columnType) {
+      case Types.BIT:
+      case Types.BOOLEAN:
+        cell.setCellValue(resultSet.getBoolean(col) ? "Yes" : "No");
+        break;
+      case Types.DATE:
+        java.sql.Date date = resultSet.getDate(col);
+        if (date == null) {
+          cell.setBlank();
+        } else {
+          cell.setCellValue(date);
+        }
+        break;
+      case Types.TIMESTAMP:
+        java.sql.Timestamp timestamp = resultSet.getTimestamp(col);
+        if (timestamp == null) {
+          cell.setBlank();
+        } else {
+          cell.setCellValue(timestamp);
+        }
+        break;
+      case Types.DOUBLE:
+      case Types.FLOAT:
+      case Types.DECIMAL:
+      case Types.NUMERIC:
+      case Types.REAL:
+        double doubleValue = resultSet.getDouble(col);
+        if (resultSet.wasNull()) {
+          cell.setBlank();
+        } else {
+          cell.setCellValue(doubleValue);
+        }
+        break;
+      case Types.INTEGER:
+      case Types.BIGINT:
+      case Types.SMALLINT:
+      case Types.TINYINT:
+        long longValue = resultSet.getLong(col);
+        if (resultSet.wasNull()) {
+          cell.setBlank();
+        } else {
+          cell.setCellValue(longValue);
+        }
+        break;
+      default:
+        String stringValue = resultSet.getString(col);
+        if (stringValue == null) {
+          cell.setBlank();
+        } else {
+          cell.setCellValue(stringValue);
+        }
+        break;
+    }
+  }
+
+  private CellStyle createNonEditableHeaderStyle(SXSSFWorkbook workbook) {
+    String hex = config.getNonEditableHeaderColor();
+    if (hex == null || hex.isBlank()) {
+      return createHeaderStyle(workbook, DEFAULT_NON_EDITABLE_HEADER_COLOR);
+    }
+    try {
+      return createHeaderStyle(workbook, parseHexColor(hex));
+    } catch (NumberFormatException e) {
+      LOG.warn("Invalid NoneEditableHeaderColor '{}', falling back to the default light gray", hex, e);
+      return createHeaderStyle(workbook, DEFAULT_NON_EDITABLE_HEADER_COLOR);
+    }
+  }
+
+  private XSSFColor parseHexColor(String hex) {
+    String normalized = hex.startsWith("#") ? hex : "#" + hex;
+    return new XSSFColor(Color.decode(normalized), null);
+  }
+
+  private CellStyle createHeaderStyle(SXSSFWorkbook workbook, short indexedFillColor) {
     CellStyle style = workbook.createCellStyle();
-    style.setLocked(true);
+    style.setFillForegroundColor(indexedFillColor);
+    style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+    finishHeaderStyle(workbook, style);
     return style;
   }
 
-  private CellStyle createUnlockedStyle(Workbook workbook) {
+  private CellStyle createHeaderStyle(SXSSFWorkbook workbook, XSSFColor fillColor) {
     CellStyle style = workbook.createCellStyle();
-    style.setLocked(false);
+    ((XSSFCellStyle) style).setFillForegroundColor(fillColor);
+    style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+    finishHeaderStyle(workbook, style);
     return style;
   }
 
-  private CellStyle createHeaderStyle(Workbook workbook) {
-    CellStyle style = workbook.createCellStyle();
+  private void finishHeaderStyle(SXSSFWorkbook workbook, CellStyle style) {
     style.setLocked(true);
     Font font = workbook.createFont();
     font.setBold(true);
     style.setFont(font);
-    style.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
-    style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-    return style;
-  }
-
-  private void writeHeaderRow(Sheet sheet, List<String> columns, CellStyle headerStyle) {
-    Row headerRow = sheet.createRow(0);
-    for (int c = 0; c < columns.size(); c++) {
-      Cell cell = headerRow.createCell(c);
-      cell.setCellValue(columns.get(c));
-      cell.setCellStyle(headerStyle);
-    }
-  }
-
-  private void writeDataRows(Sheet sheet, List<String> columns, List<Map<String, Object>> dataRows,
-      CellStyle lockedStyle, CellStyle unlockedStyle) {
-    for (int r = 0; r < dataRows.size(); r++) {
-      Row row = sheet.createRow(r + 1);
-      Map<String, Object> record = dataRows.get(r);
-      for (int c = 0; c < columns.size(); c++) {
-        String columnName = columns.get(c);
-        Cell cell = row.createCell(c);
-        setCellValue(cell, record.get(columnName));
-        cell.setCellStyle(config.isEditable(columnName) ? unlockedStyle : lockedStyle);
-      }
-    }
-  }
-
-  private void setCellValue(Cell cell, Object value) {
-    if (value == null) {
-      cell.setBlank();
-    } else if (value instanceof Number) {
-      cell.setCellValue(((Number) value).doubleValue());
-    } else if (value instanceof Boolean) {
-      cell.setCellValue((Boolean) value);
-    } else if (value instanceof Date) {
-      cell.setCellValue((Date) value);
-    } else {
-      cell.setCellValue(String.valueOf(value));
-    }
+    style.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+    style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+    style.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+    style.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
   }
 
   /**
@@ -151,10 +286,13 @@ public final class ExcelGenerator {
    * CTSheetProtection, so the package-private field "_sh" (verified against
    * Apache POI 5.2.5) is accessed via reflection. This is the documented
    * workaround for blocking row/column insertion and deletion under SXSSF.
+   *
+   * <p>Protection is always applied with an empty password: ExcelPassword only
+   * controls whether the whole file is encrypted for opening (see {@link #encrypt}),
+   * not whether cell locks require a password to remove.
    */
   private void protectSheet(SXSSFSheet sheet) {
-    String password = config.getProtectionPassword();
-    sheet.protectSheet(password != null ? password : "");
+    sheet.protectSheet("");
 
     try {
       Field shField = SXSSFSheet.class.getDeclaredField("_sh");
@@ -167,6 +305,50 @@ public final class ExcelGenerator {
       protection.setDeleteColumns(true);
     } catch (ReflectiveOperationException e) {
       throw new ExcelGenerationException("Failed to apply sheet structural protection", e);
+    }
+  }
+
+  /**
+   * Caches the 6 locked/unlocked x plain/date/date-time cell style combinations
+   * needed per workbook, so repeated rows reuse the same CellStyle instances
+   * instead of creating a new one per cell (POI caps the number of distinct
+   * styles a workbook can hold).
+   */
+  private static final class DataStyles {
+    private final CellStyle lockedPlain;
+    private final CellStyle unlockedPlain;
+    private final CellStyle lockedDate;
+    private final CellStyle unlockedDate;
+    private final CellStyle lockedDateTime;
+    private final CellStyle unlockedDateTime;
+
+    DataStyles(SXSSFWorkbook workbook, String dateFormat, String dateTimeFormat) {
+      this.lockedPlain = createStyle(workbook, true, null);
+      this.unlockedPlain = createStyle(workbook, false, null);
+      this.lockedDate = createStyle(workbook, true, dateFormat);
+      this.unlockedDate = createStyle(workbook, false, dateFormat);
+      this.lockedDateTime = createStyle(workbook, true, dateTimeFormat);
+      this.unlockedDateTime = createStyle(workbook, false, dateTimeFormat);
+    }
+
+    CellStyle styleFor(int columnType, boolean editable) {
+      switch (columnType) {
+        case Types.DATE:
+          return editable ? unlockedDate : lockedDate;
+        case Types.TIMESTAMP:
+          return editable ? unlockedDateTime : lockedDateTime;
+        default:
+          return editable ? unlockedPlain : lockedPlain;
+      }
+    }
+
+    private static CellStyle createStyle(SXSSFWorkbook workbook, boolean locked, String numberFormat) {
+      CellStyle style = workbook.createCellStyle();
+      style.setLocked(locked);
+      if (numberFormat != null) {
+        style.setDataFormat(workbook.createDataFormat().getFormat(numberFormat));
+      }
+      return style;
     }
   }
 }

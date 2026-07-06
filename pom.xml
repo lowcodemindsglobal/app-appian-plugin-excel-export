@@ -6,7 +6,7 @@
 
   <groupId>com.lowcodeminds.appian.plugins</groupId>
   <artifactId>excel-export-plugin</artifactId>
-  <version>1.0.1-SNAPSHOT</version>
+  <version>1.0.2-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>Appian Smart Service - Excel Export with Column-Level Protection</name>
@@ -25,15 +25,17 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <poi.version>5.2.5</poi.version>
     <junit.version>5.10.2</junit.version>
+    <h2.version>2.2.224</h2.version>
     <!--
-      dataRows is accepted as a JSON string (not a native "List of Dictionary"
-      input - see ExcelExportSmartService's class Javadoc for why) and parsed
-      with Jackson. Relocated in the shade config below, same reasoning as
-      Apache POI: Appian's server very likely bundles its own Jackson version
-      internally, so an unrelocated copy risks the same classpath-conflict
-      failure mode the Technical Design Report calls out for POI.
+      SQLSheetData (the SQLSheetDataList input's CDT) is annotated with
+      javax.xml.bind.annotation - the same JAXB annotation style Appian's own
+      plugin loader uses to recognize plugin-declared datatypes. JAXB was
+      removed from the JDK itself in Java 11, so this must be declared
+      explicitly; scope "provided" because Appian's application server
+      supplies the actual JAXB runtime implementation, matching how
+      appian-plugin-sdk itself is "provided" below.
     -->
-    <jackson.version>2.18.2</jackson.version>
+    <jaxb.version>2.3.1</jaxb.version>
     <!--
       SLF4J API, scope "provided" - Appian's application server supplies the
       actual logging backend and routes it into Appian's own logs, so the
@@ -85,15 +87,29 @@
     </dependency>
 
     <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-      <version>${jackson.version}</version>
+      <groupId>javax.xml.bind</groupId>
+      <artifactId>jaxb-api</artifactId>
+      <version>${jaxb.version}</version>
+      <scope>provided</scope>
     </dependency>
 
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!--
+      Real in-memory JDBC engine for ExcelGeneratorTest - exercises the actual
+      SQL-to-sheet pipeline (ResultSetMetaData column labels/types, streaming
+      row iteration) against a genuine JDBC driver rather than hand-mocked
+      Connection/ResultSet objects. Test scope only, never bundled or shaded.
+    -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <version>${h2.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -171,10 +187,6 @@
                 <relocation>
                   <pattern>org.apache.poi</pattern>
                   <shadedPattern>com.lowcodeminds.appian.plugins.excel.shaded.poi</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>com.fasterxml.jackson</pattern>
-                  <shadedPattern>com.lowcodeminds.appian.plugins.excel.shaded.jackson</shadedPattern>
                 </relocation>
               </relocations>
               <filters>
