@@ -73,17 +73,18 @@ they show up anywhere in the dependency tree, transitively or not.
 ```
 src/main/resources/
   appian-plugin.xml                                        # plug-in descriptor, JAR root
-  com/lowcodeminds/plugins/advance-excel-export/
-    advanceExcelExport.properties                      # i18n: labels, tooltips (no locale suffix - see file header comment)
   com.lowcodeminds.plugins.advance-excel-export/
+    advanceExcelExport_en_US.properties                     # i18n: labels, tooltips - locale suffix required, see file header comment
     advanceExcelExport/images/
       palette-icon.svg                                      # 27x19, placeholder artwork
       canvas-icon.svg                                        # 60x40, placeholder artwork
 ```
 
 These resource paths are derived from the plug-in's `key`
-(`com.lowcodeminds.plugins.advance-excel-export`), not its display `name` -
-renaming one without the other leaves the properties/icons undiscoverable.
+(`com.lowcodeminds.plugins.advance-excel-export`, kept as a literal folder
+name - dots are not converted to nested package folders), not its display
+`name` - renaming the key without also moving these paths leaves the
+properties/icons undiscoverable.
 
 ## Deploy
 
@@ -95,11 +96,14 @@ renaming one without the other leaves the properties/icons undiscoverable.
    branded artwork before a production release (optional - the reference
    sibling plug-in shipped successfully with no icons at all).
 4. The i18n bundle's resource-path convention (see comments in
-   `advanceExcelExport.properties`) was cross-checked against
-   `appian-header-match-plugin`'s real, working bundle, not independently
-   verified against the SDK jar's bytecode the way the Java classes were. If
-   input/output labels don't render in the Process Modeler, check this file
-   first.
+   `advanceExcelExport_en_US.properties`) is verified against fast-excel, a
+   real, deployed sibling plug-in whose properties file lives directly under
+   a folder named literally as its plug-in key, with a required locale suffix
+   on the filename (`writeSQLToExcelV1_en_US.properties`). An earlier version
+   of this file used a different, unverified convention (dots-as-nested-folders,
+   no locale suffix) that empirically failed in a real deployment - input/output
+   labels rendered as auto-generated fallbacks instead of the `.label` values.
+   If labels ever regress to that fallback again, check this file's path first.
 
 ## Input contract: `dataRowsJson` is a JSON string, not a Dictionary array
 
