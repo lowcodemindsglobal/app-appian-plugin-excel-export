@@ -45,12 +45,18 @@
 
   <!--
     ContentService and javax.naming.Context are injected into
-    ExcelExportSmartService's constructor automatically by the Appian plug-in
+    AdvanceExcelExport's constructor automatically by the Appian plug-in
     framework, which recognizes constructor parameters typed as public *Service
     interfaces or as Context - no manual wiring belongs here.
+
+    The smart-service "key" below is, like the plug-in key above, a permanent
+    identifier once deployed - it was renamed here from excelExportSmartService
+    to advanceExcelExport as part of the same rebrand, safe only because this
+    plug-in had not yet been deployed anywhere. Do not repeat this rename after
+    a real deployment.
   -->
   <smart-service name="Excel Export"
-                 key="excelExportSmartService"
-                 class="com.lowcodeminds.appian.plugins.excel.ExcelExportSmartService"/>
+                 key="advanceExcelExport"
+                 class="com.lowcodeminds.appian.plugins.excel.AdvanceExcelExport"/>
 
 </appian-plugin>

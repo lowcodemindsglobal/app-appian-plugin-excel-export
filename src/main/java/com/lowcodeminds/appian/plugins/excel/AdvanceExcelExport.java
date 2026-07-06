@@ -60,9 +60,9 @@ import java.util.List;
 @AutomationSmartServicesDocumentGeneration
 @Unattended
 @Order({"SQLSheetDataList", "jndiName", "editableColumns", "targetFolder", "NewDocumentName", "DateFormat", "DateTimeFormat", "NoneEditableHeaderColor", "ExcelPassword"})
-public class ExcelExportSmartService extends AppianSmartService {
+public class AdvanceExcelExport extends AppianSmartService {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ExcelExportSmartService.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AdvanceExcelExport.class);
   private static final String XLSX_EXTENSION = "xlsx";
   private static final int MAX_SHEETS = 20;
   private static final String SQL_SHEET_DATA_LIST_INPUT = "SQLSheetDataList";
@@ -85,7 +85,7 @@ public class ExcelExportSmartService extends AppianSmartService {
   private Long newDocumentCreated;
   private String errorMessage;
 
-  public ExcelExportSmartService(ContentService contentService, Context context) {
+  public AdvanceExcelExport(ContentService contentService, Context context) {
     this.contentService = contentService;
     this.context = context;
   }

@@ -21,7 +21,7 @@ mvn clean package
 ```
 
 Produces the deployable shaded JAR at
-`target/excel-export-plugin-1.0.0-SNAPSHOT.jar` (POI is relocated to
+`target/advance-excel-export-1.0.0-SNAPSHOT.jar` (POI is relocated to
 `com.lowcodeminds.appian.plugins.excel.shaded.poi` to avoid classpath
 conflicts with whatever version Appian's own server bundles internally).
 
@@ -74,9 +74,9 @@ they show up anywhere in the dependency tree, transitively or not.
 src/main/resources/
   appian-plugin.xml                                        # plug-in descriptor, JAR root
   com/lowcodeminds/plugins/advance-excel-export/
-    excelExportSmartService.properties                      # i18n: labels, tooltips (no locale suffix - see file header comment)
+    advanceExcelExport.properties                      # i18n: labels, tooltips (no locale suffix - see file header comment)
   com.lowcodeminds.plugins.advance-excel-export/
-    excelExportSmartService/images/
+    advanceExcelExport/images/
       palette-icon.svg                                      # 27x19, placeholder artwork
       canvas-icon.svg                                        # 60x40, placeholder artwork
 ```
@@ -87,7 +87,7 @@ renaming one without the other leaves the properties/icons undiscoverable.
 
 ## Deploy
 
-1. Upload `target/excel-export-plugin-1.0.0-SNAPSHOT.jar` via the Appian
+1. Upload `target/advance-excel-export-1.0.0-SNAPSHOT.jar` via the Appian
    Admin Console (Plug-ins section).
 2. Confirm the "Excel Export" node appears in the Process Model Designer's
    palette, under Automation Smart Services > Document Generation.
@@ -95,7 +95,7 @@ renaming one without the other leaves the properties/icons undiscoverable.
    branded artwork before a production release (optional - the reference
    sibling plug-in shipped successfully with no icons at all).
 4. The i18n bundle's resource-path convention (see comments in
-   `excelExportSmartService.properties`) was cross-checked against
+   `advanceExcelExport.properties`) was cross-checked against
    `appian-header-match-plugin`'s real, working bundle, not independently
    verified against the SDK jar's bytecode the way the Java classes were. If
    input/output labels don't render in the Process Modeler, check this file
@@ -122,14 +122,14 @@ does the SDK expose an annotation plugin authors can use to declare one
 covers Dictionary). One bad input type disables the *entire* node at load
 time, regardless of the other inputs being fine.
 
-`ExcelExportSmartService` parses `dataRowsJson` with Jackson
+`AdvanceExcelExport` parses `dataRowsJson` with Jackson
 (`ObjectMapper.readValue`) inside `run()` instead - `String` is unambiguously
 supported, sidestepping the problem entirely. Same pattern as
 `appian-header-match-plugin`'s `existingMappingsJson` input.
 
 ## Known caveat
 
-`ExcelExportSmartService` uses `ContentService.upload()` /
+`AdvanceExcelExport` uses `ContentService.upload()` /
 `ContentOutputStream` to save the generated file, even though the SDK marks
 both `@Deprecated`. The non-deprecated alternative
 (`Document.write(InputStream)` / `getOutputStream()`) delegates to an

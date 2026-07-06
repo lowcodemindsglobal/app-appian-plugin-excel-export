@@ -5,7 +5,7 @@ import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlType;
 
 /**
- * Input CDT for {@link ExcelExportSmartService}'s {@code SQLSheetDataList} input: one
+ * Input CDT for {@link AdvanceExcelExport}'s {@code SQLSheetDataList} input: one
  * SQL query and the sheet name its results should be written to.
  */
 @XmlRootElement(name = "SQLSheetData", namespace = "urn:com.lowcodeminds:types:SQLSheetData")
