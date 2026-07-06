@@ -3,6 +3,7 @@ package com.lowcodeminds.appian.plugins.excel;
 import com.appiancorp.suiteapi.common.Name;
 import com.appiancorp.suiteapi.common.exceptions.PrivilegeException;
 import com.appiancorp.suiteapi.common.exceptions.StorageLimitException;
+import com.appiancorp.suiteapi.content.Content;
 import com.appiancorp.suiteapi.content.ContentConstants;
 import com.appiancorp.suiteapi.content.ContentOutputStream;
 import com.appiancorp.suiteapi.content.ContentService;
@@ -242,28 +243,76 @@ public class ExcelExportSmartService extends AppianSmartService {
    * on framework-returned Document instances. Calling them on a plugin-constructed Document
    * NPEs. upload() remains the only working path for plugins to push byte content, so the
    * deprecation warning is intentionally suppressed here.
+   *
+   * <p>If a document named {@code fileName.xlsx} already exists directly in the
+   * target folder, this overwrites it by uploading a new version onto that
+   * existing content id instead of creating a sibling - which is what let a
+   * second run with the same folder+fileName previously fail with
+   * InsufficientNameUniquenessException. Otherwise it creates a new document,
+   * exactly as before.
    */
   @SuppressWarnings("deprecation")
   private Long saveAsDocument(byte[] excelBytes, ColumnProtectionConfig config)
       throws InvalidContentException, StorageLimitException, PrivilegeException,
       InsufficientNameUniquenessException, DuplicateUuidException, IOException {
+    Long existingDocumentId = findExistingDocumentId(config);
+
     Document document = new Document();
     document.setName(config.getFileName());
     document.setParent(config.getTargetFolderId());
     document.setExtension(XLSX_EXTENSION);
 
-    // upload() alone both creates the content item and gives back a stream to
-    // write its bytes to - it must not be preceded by a separate create()
-    // call. An earlier version of this method called create() first (with
-    // UNIQUE_FOR_PARENT) and then upload() (with VERSION_CURRENT) on the same
-    // Document; upload() runs its own name-uniqueness check independently of
-    // create(), so it saw the document create() had just made as a colliding
-    // sibling and failed with InsufficientNameUniquenessException every time.
+    // upload() alone both creates/versions the content item and gives back a
+    // stream to write its bytes to - it must not be preceded by a separate
+    // create() call. An earlier version of this method called create() first
+    // (with UNIQUE_FOR_PARENT) and then upload() (with VERSION_CURRENT) on the
+    // same Document; upload() runs its own name-uniqueness check independently
+    // of create(), so it saw the document create() had just made as a
+    // colliding sibling and failed with InsufficientNameUniquenessException
+    // every time.
+    //
+    // VERSION_CURRENT here is different from that historical bug: it's paired
+    // with a Document that already carries the id of a pre-existing document
+    // (set below), so upload() versions that document instead of creating a
+    // new sibling - there is no create() call in this path to collide with.
+    Integer uploadMode;
+    if (existingDocumentId != null) {
+      document.setId(existingDocumentId);
+      uploadMode = ContentConstants.VERSION_CURRENT;
+    } else {
+      uploadMode = ContentConstants.UNIQUE_FOR_PARENT;
+    }
+
     Long newDocumentId;
-    try (ContentOutputStream contentOutputStream = contentService.upload(document, ContentConstants.UNIQUE_FOR_PARENT)) {
+    try (ContentOutputStream contentOutputStream = contentService.upload(document, uploadMode)) {
       contentOutputStream.write(excelBytes);
       newDocumentId = contentOutputStream.getContentId();
     }
     return newDocumentId;
+  }
+
+  /**
+   * Resolves the content id of an existing {@code fileName.xlsx} document
+   * directly inside the target folder, or null if none exists yet.
+   *
+   * <p>Uses getByPath rather than getIdByPath+getContent so the lookup needs
+   * one call instead of two, and so it doesn't touch getContent(Long), which
+   * the SDK marks {@code @Deprecated}. getByPath's not-found behavior isn't
+   * consistently documented across SDK versions, so an InvalidContentException
+   * is treated as "not found" here rather than as an error. A path that does
+   * resolve is further checked with instanceof Document, since it could in
+   * principle resolve to a non-document piece of content (e.g. a folder)
+   * that happens to share the same name and extension-like suffix - such a
+   * match must not be treated as a document to overwrite.
+   */
+  private Long findExistingDocumentId(ColumnProtectionConfig config) throws InvalidContentException {
+    String relativePath = config.getFileName() + "." + XLSX_EXTENSION;
+    Content existingContent;
+    try {
+      existingContent = contentService.getByPath(config.getTargetFolderId(), relativePath);
+    } catch (InvalidContentException e) {
+      return null;
+    }
+    return existingContent instanceof Document ? existingContent.getId() : null;
   }
 }
