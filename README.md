@@ -21,10 +21,9 @@ mvn clean package
 ```
 
 Produces the deployable shaded JAR at
-`target/excel-export-plugin-1.0.1-SNAPSHOT.jar` (POI and Jackson are both
-relocated to `com.lowcodeminds.appian.plugins.excel.shaded.*` to avoid
-classpath conflicts with whatever versions of those libraries Appian's own
-server bundles internally).
+`target/excel-export-plugin-1.0.0-SNAPSHOT.jar` (POI is relocated to
+`com.lowcodeminds.appian.plugins.excel.shaded.poi` to avoid classpath
+conflicts with whatever version Appian's own server bundles internally).
 
 ## Appian SDK dependency
 
@@ -74,21 +73,24 @@ they show up anywhere in the dependency tree, transitively or not.
 ```
 src/main/resources/
   appian-plugin.xml                                        # plug-in descriptor, JAR root
-  com/lowcodeminds/plugins/excel-export-plugin-v2/
+  com/lowcodeminds/plugins/advance-excel-export/
     excelExportSmartService.properties                      # i18n: labels, tooltips (no locale suffix - see file header comment)
-  com.lowcodeminds.plugins.excel-export-plugin-v2/
+  com.lowcodeminds.plugins.advance-excel-export/
     excelExportSmartService/images/
       palette-icon.svg                                      # 27x19, placeholder artwork
       canvas-icon.svg                                        # 60x40, placeholder artwork
 ```
 
+These resource paths are derived from the plug-in's `key`
+(`com.lowcodeminds.plugins.advance-excel-export`), not its display `name` -
+renaming one without the other leaves the properties/icons undiscoverable.
+
 ## Deploy
 
-1. Upload `target/excel-export-plugin-1.0.1-SNAPSHOT.jar` via the Appian
+1. Upload `target/excel-export-plugin-1.0.0-SNAPSHOT.jar` via the Appian
    Admin Console (Plug-ins section).
-2. Confirm the "Excel Export with Protection" node appears in the Process
-   Model Designer's palette, under Automation Smart Services > Document
-   Generation.
+2. Confirm the "Excel Export" node appears in the Process Model Designer's
+   palette, under Automation Smart Services > Document Generation.
 3. Replace the placeholder `palette-icon.svg` / `canvas-icon.svg` with real
    branded artwork before a production release (optional - the reference
    sibling plug-in shipped successfully with no icons at all).

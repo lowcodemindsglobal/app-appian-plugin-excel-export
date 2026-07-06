@@ -16,15 +16,19 @@
   anywhere, never change it - Appian best practice is to deprecate old smart
   services (move them to the "Deprecated Services" palette category) rather than
   remove or rename them, so processes already using this node keep working.
+  Renamed from com.lowcodeminds.plugins.excel-export-plugin-v2 to
+  com.lowcodeminds.plugins.advance-excel-export as part of the "Advance Excel
+  Export" rebrand - safe only because this plug-in had not yet been deployed
+  anywhere. Do not repeat this rename after a real deployment.
 -->
-<appian-plugin name="Excel Export with Protection"
-               key="com.lowcodeminds.plugins.excel-export-plugin-v2">
+<appian-plugin name="Advance Excel Export"
+               key="com.lowcodeminds.plugins.advance-excel-export">
 
   <plugin-info>
     <description>Runs SQL queries against a JNDI data source and exports the results to a
       multi-sheet, column-protected Excel (.xlsx) document.</description>
     <vendor name="LowCodeMinds" url="https://www.lowcodeminds.com"/>
-    <version>1.0.2</version>
+    <version>1.0.0</version>
     <!--
       application-version's "min" attribute (minimum supported Appian version) is
       left unset on purpose: the target environment was only confirmed as
@@ -35,7 +39,7 @@
   </plugin-info>
 
   <!-- Data Type -->
-  <datatype key="SQLSheetData" name="Input Datatype for Excel Export Plugin">
+  <datatype key="SQLSheetData" name="Input Datatype for Advance Excel Export">
     <class>com.lowcodeminds.appian.plugins.excel.SQLSheetData</class>
   </datatype>
 
@@ -45,7 +49,7 @@
     framework, which recognizes constructor parameters typed as public *Service
     interfaces or as Context - no manual wiring belongs here.
   -->
-  <smart-service name="Excel Export with Protection"
+  <smart-service name="Excel Export"
                  key="excelExportSmartService"
                  class="com.lowcodeminds.appian.plugins.excel.ExcelExportSmartService"/>
 
