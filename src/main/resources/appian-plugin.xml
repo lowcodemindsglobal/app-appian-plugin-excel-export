@@ -44,10 +44,11 @@
   </datatype>
 
   <!--
-    ContentService and javax.naming.Context are injected into
-    AdvanceExcelExport's constructor automatically by the Appian plug-in
-    framework, which recognizes constructor parameters typed as public *Service
-    interfaces or as Context - no manual wiring belongs here.
+    SmartServiceContext, ContentService, and javax.naming.Context are injected
+    into AdvanceExcelExport's constructor automatically by the Appian plug-in
+    framework, which recognizes constructor parameters typed as
+    SmartServiceContext, public *Service interfaces, or as Context - no manual
+    wiring belongs here.
 
     The smart-service "key" below is, like the plug-in key above, a permanent
     identifier once deployed - it was renamed here from excelExportSmartService
@@ -58,5 +59,24 @@
   <smart-service name="Excel Export"
                  key="advanceExcelExport"
                  class="com.lowcodeminds.appian.plugins.excel.AdvanceExcelExport"/>
+
+  <!--
+    Versioning/deprecation convention for AFTER this plug-in has been deployed at
+    least once (per Appian's documented guidance: "If you need to modify the
+    inputs or outputs of a smart service, create a new smart service and
+    deprecate the previous version" - existing process models keep resolving the
+    old key/inputs, so nothing already built breaks):
+
+    1. Do NOT edit this <smart-service> element's "key", or add/remove/retype any
+       of AdvanceExcelExport's @Input/@Name inputs or outputs, once deployed.
+    2. If the input/output contract must change, add a NEW <smart-service> entry
+       here with a new key (advanceExcelExportV2, advanceExcelExportV3, ...) and
+       a correspondingly renamed/new Java class - never repurpose this key.
+    3. Move this entry's palette placement to Appian's "Deprecated Services"
+       category (e.g. via @PaletteInfo on the now-superseded class) rather than
+       removing it, so processes already using "Excel Export" keep working.
+    4. Bump <version> above for every change, per Appian's plug-in versioning
+       guidance, whether or not a new smart-service entry was added.
+  -->
 
 </appian-plugin>

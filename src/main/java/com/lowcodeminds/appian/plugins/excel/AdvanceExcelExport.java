@@ -19,6 +19,7 @@ import com.appiancorp.suiteapi.process.framework.Input;
 import com.appiancorp.suiteapi.process.framework.MessageContainer;
 import com.appiancorp.suiteapi.process.framework.Order;
 import com.appiancorp.suiteapi.process.framework.Required;
+import com.appiancorp.suiteapi.process.framework.SmartServiceContext;
 import com.appiancorp.suiteapi.process.framework.Unattended;
 import com.appiancorp.suiteapi.process.palette.AutomationSmartServicesDocumentGeneration;
 import org.slf4j.Logger;
@@ -36,11 +37,15 @@ import java.util.List;
  * Smart Service node: runs one SQL query per sheet against a JNDI data source and
  * saves the combined result as a column-protected .xlsx Appian Document.
  *
- * <p>{@link ContentService} and {@link Context} are injected as constructor
- * parameters. The Appian plug-in framework recognizes constructor parameters typed
- * as public {@code *Service} interfaces or {@code javax.naming.Context}, and
- * supplies them automatically - this class does not need, and must not have, any
- * manual Spring/DI wiring for either.
+ * <p>{@link SmartServiceContext}, {@link ContentService}, and {@link Context} are
+ * injected as constructor parameters. The Appian plug-in framework recognizes
+ * constructor parameters typed as {@code SmartServiceContext}, public
+ * {@code *Service} interfaces, or {@code javax.naming.Context}, and supplies them
+ * automatically - this class does not need, and must not have, any manual
+ * Spring/DI wiring for any of them. {@code SmartServiceContext} is used only to
+ * resolve {@link SmartServiceContext#getPrimaryLocale()} for localizing the
+ * {@code ErrorMessage} output text; it is not otherwise needed by this smart
+ * service.
  *
  * <p>{@code @AutomationSmartServicesDocumentGeneration} is one of the SDK's
  * built-in convenience annotations; it is equivalent to writing
@@ -56,6 +61,14 @@ import java.util.List;
  * failure is also thrown as a {@link SmartServiceException} so a process that
  * doesn't check the output still stops instead of silently continuing with a
  * null {@code NewDocumentCreated}.
+ *
+ * <p>All validation and failure text is sourced from this plug-in's resource
+ * bundle rather than hardcoded here, per Appian's documented pattern: {@link
+ * MessageContainer#addError} takes a message-bundle key (not literal text), and
+ * {@link SmartServiceException.Builder} resolves its {@code userMessage}/{@code
+ * alertMessage} keys against the same bundle already registered for this smart
+ * service - passing this class to the Builder is enough, no explicit bundle name
+ * needed.
  */
 @AutomationSmartServicesDocumentGeneration
 @Unattended
@@ -67,6 +80,18 @@ public class AdvanceExcelExport extends AppianSmartService {
   private static final int MAX_SHEETS = 20;
   private static final String SQL_SHEET_DATA_LIST_INPUT = "SQLSheetDataList";
 
+  // Message-bundle keys, resolved against this plug-in's registered resource
+  // bundle (see advanceExcelExport_en_US.properties) by MessageContainer.addError
+  // and by SmartServiceException.Builder - never literal, hardcoded message text.
+  private static final String ERROR_SQL_SHEET_DATA_LIST_EMPTY = "advanceExcelExport.error.sqlSheetDataListEmpty";
+  private static final String ERROR_TOO_MANY_SHEETS = "advanceExcelExport.error.tooManySheets";
+  private static final String ERROR_SHEET_NAME_MISSING = "advanceExcelExport.error.sheetNameMissing";
+  private static final String ERROR_SQL_QUERY_MISSING = "advanceExcelExport.error.sqlQueryMissing";
+  private static final String ERROR_SQL_QUERY_NOT_SELECT = "advanceExcelExport.error.sqlQueryNotSelect";
+  private static final String ERROR_SQL_QUERY_TRAILING_SEMICOLON = "advanceExcelExport.error.sqlQueryTrailingSemicolon";
+  private static final String ERROR_EXECUTION_FAILED = "advanceExcelExport.error.executionFailed";
+
+  private final SmartServiceContext smartServiceContext;
   private final ContentService contentService;
   private final Context context;
 
@@ -85,7 +110,8 @@ public class AdvanceExcelExport extends AppianSmartService {
   private Long newDocumentCreated;
   private String errorMessage;
 
-  public AdvanceExcelExport(ContentService contentService, Context context) {
+  public AdvanceExcelExport(SmartServiceContext smartServiceContext, ContentService contentService, Context context) {
+    this.smartServiceContext = smartServiceContext;
     this.contentService = contentService;
     this.context = context;
   }
@@ -168,12 +194,12 @@ public class AdvanceExcelExport extends AppianSmartService {
     super.validate(messages);
 
     if (sqlSheetDataList == null || sqlSheetDataList.length == 0) {
-      messages.addError(SQL_SHEET_DATA_LIST_INPUT, "SQL Sheet Data List must not be empty.");
+      messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SQL_SHEET_DATA_LIST_EMPTY);
       return;
     }
 
     if (sqlSheetDataList.length > MAX_SHEETS) {
-      messages.addError(SQL_SHEET_DATA_LIST_INPUT, "A maximum of " + MAX_SHEETS + " sheets is allowed.");
+      messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_TOO_MANY_SHEETS, MAX_SHEETS);
     }
 
     for (SQLSheetData sheetData : sqlSheetDataList) {
@@ -183,19 +209,19 @@ public class AdvanceExcelExport extends AppianSmartService {
 
   private void validateSheetData(MessageContainer messages, SQLSheetData sheetData) {
     if (sheetData.getSheetName() == null || sheetData.getSheetName().isBlank()) {
-      messages.addError(SQL_SHEET_DATA_LIST_INPUT, "Sheet Name is missing.");
+      messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SHEET_NAME_MISSING);
     }
 
     String sqlQuery = sheetData.getSqlQuery();
     if (sqlQuery == null || sqlQuery.isBlank()) {
-      messages.addError(SQL_SHEET_DATA_LIST_INPUT, "SQL Query is missing.");
+      messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SQL_QUERY_MISSING);
       return;
     }
     if (!sqlQuery.trim().toUpperCase().startsWith("SELECT")) {
-      messages.addError(SQL_SHEET_DATA_LIST_INPUT, "SQL Query invalid syntax. Only SELECT statements are allowed.");
+      messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SQL_QUERY_NOT_SELECT);
     }
     if (sqlQuery.trim().endsWith(";")) {
-      messages.addError(SQL_SHEET_DATA_LIST_INPUT, "SQL Query must not end with a semicolon.");
+      messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SQL_QUERY_TRAILING_SEMICOLON);
     }
   }
 
@@ -217,9 +243,13 @@ public class AdvanceExcelExport extends AppianSmartService {
       this.newDocumentCreated = saveAsDocument(excelBytes, config);
       LOG.info("Excel export completed, documentId={}", newDocumentCreated);
     } catch (Exception e) {
-      errorMessage = e.getMessage();
       LOG.error("Error generating Excel from SQL", e);
-      throw new SmartServiceException(getClass(), e, errorMessage);
+      SmartServiceException smartServiceException = new SmartServiceException.Builder(getClass(), e)
+          .userMessage(ERROR_EXECUTION_FAILED)
+          .addCauseToUserMessageArgs()
+          .build();
+      errorMessage = smartServiceException.getAttendedUserMessage(smartServiceContext.getPrimaryLocale());
+      throw smartServiceException;
     }
   }
 
