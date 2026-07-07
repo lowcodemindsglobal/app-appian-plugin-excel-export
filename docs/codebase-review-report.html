@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Codebase Review — Advance Excel Export Plug-in</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #eef1f4;
+    --border: #dde1e7;
+    --text: #1a2230;
+    --text-muted: #57626f;
+    --accent: #2f5fa0;
+    --accent-soft: #e4edf8;
+    --accent-2: #0d7d72;
+    --critical: #b3261e;
+    --critical-bg: #fbe9e8;
+    --high: #ad5b0a;
+    --high-bg: #fbeee0;
+    --medium: #8a6408;
+    --medium-bg: #faf2dd;
+    --low: #2f6fae;
+    --low-bg: #e7f0fa;
+    --info: #5b6472;
+    --info-bg: #eceef1;
+    --good: #1f7a5c;
+    --good-bg: #e4f3ec;
+    --radius: 10px;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10151a;
+      --surface: #171d23;
+      --surface-2: #1d242b;
+      --border: #2b333b;
+      --text: #e8ecf0;
+      --text-muted: #9aa4ad;
+      --accent: #7db1e8;
+      --accent-soft: #1b2a3a;
+      --accent-2: #34d6c4;
+      --critical: #ff8b85;
+      --critical-bg: #3a1e1e;
+      --high: #ffb877;
+      --high-bg: #3a2a15;
+      --medium: #f0c568;
+      --medium-bg: #362c10;
+      --low: #8fc1f5;
+      --low-bg: #17293a;
+      --info: #aeb8c1;
+      --info-bg: #232b32;
+      --good: #6fd3ab;
+      --good-bg: #123227;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10151a; --surface: #171d23; --surface-2: #1d242b; --border: #2b333b;
+    --text: #e8ecf0; --text-muted: #9aa4ad; --accent: #7db1e8; --accent-soft: #1b2a3a;
+    --accent-2: #34d6c4; --critical: #ff8b85; --critical-bg: #3a1e1e; --high: #ffb877;
+    --high-bg: #3a2a15; --medium: #f0c568; --medium-bg: #362c10; --low: #8fc1f5;
+    --low-bg: #17293a; --info: #aeb8c1; --info-bg: #232b32; --good: #6fd3ab; --good-bg: #123227;
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eef1f4; --border: #dde1e7;
+    --text: #1a2230; --text-muted: #57626f; --accent: #2f5fa0; --accent-soft: #e4edf8;
+    --accent-2: #0d7d72; --critical: #b3261e; --critical-bg: #fbe9e8; --high: #ad5b0a;
+    --high-bg: #fbeee0; --medium: #8a6408; --medium-bg: #faf2dd; --low: #2f6fae;
+    --low-bg: #e7f0fa; --info: #5b6472; --info-bg: #eceef1; --good: #1f7a5c; --good-bg: #e4f3ec;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  a { color: var(--accent); }
+  h1, h2, h3, h4 { font-family: var(--serif); font-weight: 700; text-wrap: balance; color: var(--text); }
+  code, .mono { font-family: var(--mono); }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 48px;
+  }
+  @media (max-width: 900px) {
+    .page { grid-template-columns: 1fr; }
+    .toc { position: static !important; order: 2; }
+  }
+
+  header.masthead {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 56px 24px 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 12px;
+    color: var(--accent-2);
+    margin: 0 0 14px;
+  }
+  header.masthead h1 {
+    font-size: clamp(28px, 4vw, 40px);
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+  .subtitle { color: var(--text-muted); font-size: 17px; max-width: 62ch; margin: 0 0 20px; }
+  .meta-row {
+    display: flex; flex-wrap: wrap; gap: 10px 28px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--text-muted);
+  }
+  .meta-row strong { color: var(--text); font-weight: 600; }
+
+  .toc {
+    align-self: start;
+    position: sticky;
+    top: 24px;
+    padding-top: 40px;
+  }
+  .toc-label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin: 0 0 10px; }
+  .toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--border); }
+  .toc li { margin: 0; }
+  .toc a {
+    display: block; padding: 6px 0 6px 16px; margin-left: -1px;
+    border-left: 2px solid transparent;
+    color: var(--text-muted); text-decoration: none; font-size: 13.5px;
+  }
+  .toc a:hover { color: var(--accent); border-left-color: var(--accent); }
+
+  main { min-width: 0; padding-top: 40px; }
+  section { margin: 0 0 56px; }
+  section > h2 {
+    font-size: 24px; margin: 0 0 6px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  section > .section-sub { color: var(--text-muted); font-size: 14.5px; margin: 0 0 20px; }
+  h3 { font-size: 18px; margin: 28px 0 10px; }
+  p { margin: 0 0 14px; max-width: 74ch; }
+  ul, ol { max-width: 74ch; }
+  li { margin-bottom: 6px; }
+
+  .callout {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 22px 24px; margin: 0 0 18px;
+  }
+  .callout.accent { border-left: 4px solid var(--accent); }
+
+  .verdict-banner {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--good-bg); border: 1px solid var(--good); border-radius: var(--radius);
+    padding: 20px 24px; margin-top: 18px;
+  }
+  .verdict-banner .verdict-tag {
+    font-family: var(--mono); font-weight: 700; letter-spacing: 0.04em;
+    color: var(--good); border: 1.5px solid var(--good); border-radius: 999px;
+    padding: 6px 16px; font-size: 13px; white-space: nowrap;
+  }
+  .verdict-banner p { margin: 0; color: var(--text); }
+
+  /* Scorecard */
+  .scorecard {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .stat-tile { background: var(--surface); padding: 18px 16px; }
+  .stat-tile .stat-value { font-family: var(--serif); font-size: 28px; font-weight: 700; }
+  .stat-tile .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+
+  .dim-table { width: 100%; border-collapse: collapse; margin: 8px 0 24px; }
+  .dim-table th, .dim-table td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 14.5px; }
+  .dim-table th { font-family: var(--mono); text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; color: var(--text-muted); }
+  .dim-table td.rating { font-weight: 600; }
+  .bar-wrap { display: flex; align-items: center; gap: 10px; }
+  .bar-track { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; max-width: 160px; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+  table.data { width: 100%; border-collapse: collapse; margin: 8px 0 20px; font-size: 14.5px; }
+  table.data th, table.data td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.data th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+  .table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  .table-scroll table.data { margin: 0; }
+  .table-scroll table.data th:first-child, .table-scroll table.data td:first-child { padding-left: 16px; }
+
+  /* Findings */
+  .finding {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 22px; margin: 0 0 18px; border-left-width: 5px; border-left-style: solid;
+  }
+  .finding.sev-critical { border-left-color: var(--critical); }
+  .finding.sev-high { border-left-color: var(--high); }
+  .finding.sev-medium { border-left-color: var(--medium); }
+  .finding.sev-low { border-left-color: var(--low); }
+  .finding.sev-info { border-left-color: var(--info); }
+
+  .finding-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .pill {
+    font-family: var(--mono); font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .pill.sev-critical { background: var(--critical-bg); color: var(--critical); }
+  .pill.sev-high { background: var(--high-bg); color: var(--high); }
+  .pill.sev-medium { background: var(--medium-bg); color: var(--medium); }
+  .pill.sev-low { background: var(--low-bg); color: var(--low); }
+  .pill.sev-info { background: var(--info-bg); color: var(--info); }
+  .pill.cat { background: var(--accent-soft); color: var(--accent); }
+
+  .finding h4 { font-family: var(--sans); font-size: 16px; margin: 4px 0 10px; }
+  .finding .loc { font-family: var(--mono); font-size: 12.5px; color: var(--text-muted); margin: 0 0 12px; }
+  .finding dl { display: grid; grid-template-columns: 130px 1fr; gap: 6px 14px; margin: 0; }
+  .finding dt { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); padding-top: 2px; }
+  .finding dd { margin: 0; font-size: 14.5px; }
+  .finding pre {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px; font-family: var(--mono); font-size: 12.5px; overflow-x: auto; margin: 4px 0 0;
+  }
+
+  .strength-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .strength-card {
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--good);
+    border-radius: var(--radius); padding: 16px 18px;
+  }
+  .strength-card h4 { margin: 0 0 6px; font-size: 15px; }
+  .strength-card p { margin: 0; font-size: 14px; color: var(--text-muted); }
+
+  .na-note {
+    font-size: 14px; color: var(--text-muted); background: var(--surface-2);
+    border-radius: 8px; padding: 12px 16px; margin: 10px 0 20px;
+  }
+
+  footer.report-footer {
+    max-width: 1180px; margin: 0 auto; padding: 32px 24px 60px; color: var(--text-muted);
+    font-size: 13px; border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <p class="eyebrow">Codebase Review Report</p>
+  <h1>Advance Excel Export — Appian Smart Service Plug-in</h1>
+  <p class="subtitle">A full-repository review of architecture, security, performance, reliability, and testing for the <code>com.lowcodeminds.appian.plugins.excel</code> plug-in, evaluated against Appian plug-in conventions and general engineering best practice.</p>
+  <div class="meta-row">
+    <span><strong>Repository:</strong> app-appian-plugin-excel-export</span>
+    <span><strong>Branch:</strong> chore/change-i/o-parameters</span>
+    <span><strong>Reviewed at commit:</strong> 39346f2</span>
+    <span><strong>Date:</strong> 2026-07-07</span>
+    <span><strong>Reviewer:</strong> Automated architecture &amp; code review</span>
+  </div>
+</header>
+
+<div class="page">
+  <nav class="toc">
+    <p class="toc-label">Contents</p>
+    <ol>
+      <li><a href="#exec-summary">Executive Summary</a></li>
+      <li><a href="#health-score">Code Health Score</a></li>
+      <li><a href="#strengths">Project Strengths</a></li>
+      <li><a href="#critical">Critical Findings</a></li>
+      <li><a href="#high">High Priority</a></li>
+      <li><a href="#medium">Medium Priority</a></li>
+      <li><a href="#low">Low / Informational</a></li>
+      <li><a href="#architecture">Architecture Review</a></li>
+      <li><a href="#security">Security Review</a></li>
+      <li><a href="#performance">Performance Review</a></li>
+      <li><a href="#scalability">Scalability Review</a></li>
+      <li><a href="#maintainability">Maintainability Review</a></li>
+      <li><a href="#testing">Testing Review</a></li>
+      <li><a href="#observability">Observability Review</a></li>
+      <li><a href="#devops">DevOps Review</a></li>
+      <li><a href="#tech-debt">Technical Debt</a></li>
+      <li><a href="#refactoring">Refactoring Opportunities</a></li>
+      <li><a href="#quick-wins">Quick Wins</a></li>
+      <li><a href="#long-term">Long-Term Recommendations</a></li>
+      <li><a href="#assessment">Overall Assessment</a></li>
+      <li><a href="#recommendation">Final Recommendation</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section id="exec-summary">
+      <h2>Executive Summary</h2>
+      <p>This repository implements a single Appian Smart Service plug-in: it runs one or more SQL queries against a JNDI-configured data source and writes the combined results into a multi-sheet, column-protected <code>.xlsx</code> workbook, optionally password-encrypted, saved back into Appian as a Document. The codebase is intentionally small — five main classes, two test classes, and Appian's required plug-in descriptor/resource files — and it stays inside that scope without unnecessary abstraction.</p>
+      <p>The implementation quality is good relative to its size: an immutable, fail-fast configuration object built via the Builder pattern, a streaming (SXSSF) Excel generator validated against a 50,000-row dataset, careful reuse of cell styles to avoid Apache POI's per-workbook style ceiling, and consistent try-with-resources use around JDBC and Appian content APIs. Documentation — both in the README and in code comments — is unusually thorough, recording several hard-won, empirically-verified Appian deployment gotchas (input type mapping limits, i18n bundle path conventions, deprecated-API usage constraints) that would otherwise cost a future maintainer real deployment cycles to rediscover.</p>
+      <p>The review's most significant findings are concentrated in two areas: (1) the SQL query "validation" in <code>AdvanceExcelExport.validate()</code> is a naive string check (starts with <code>SELECT</code>, doesn't end with <code>;</code>) that provides only superficial protection against malformed or malicious query text, and (2) <code>AdvanceExcelExport</code> — the class wired directly into the Appian runtime, containing all of the orchestration, validation, and document-overwrite logic — has no unit tests at all; only its collaborators (<code>ExcelExportConfig</code>, <code>ExcelGenerator</code>) are tested. Neither finding is a critical vulnerability or defect in the code as it exists today, but both represent real exposure as the plug-in is adopted more widely across process models.</p>
+      <p>No critical-severity issues were found. The plug-in is safe to deploy in its current state for use by trusted process designers who do not build SQL query text from untrusted end-user input; the recommendations below should be treated as hardening work for broader or higher-trust-boundary adoption.</p>
+    </section>
+
+    <section id="health-score">
+      <h2>Overall Code Health Score</h2>
+      <p class="section-sub">Qualitative scoring across the dimensions Appian plug-in and general engineering review criteria cover. Ratings are relative to the plug-in's actual scope (a synchronous, single-purpose Smart Service), not to a general-purpose service architecture.</p>
+
+      <div class="scorecard">
+        <div class="stat-tile"><div class="stat-value tabular">B+</div><div class="stat-label">Overall grade</div></div>
+        <div class="stat-tile"><div class="stat-value tabular">839</div><div class="stat-label">Main source LOC</div></div>
+        <div class="stat-tile"><div class="stat-value tabular">16</div><div class="stat-label">Unit / integration tests</div></div>
+        <div class="stat-tile"><div class="stat-value tabular">0</div><div class="stat-label">Critical findings</div></div>
+        <div class="stat-tile"><div class="stat-value tabular">2</div><div class="stat-label">High findings</div></div>
+        <div class="stat-tile"><div class="stat-value tabular">5</div><div class="main-value stat-label"></div><div class="stat-label">Files in main scope</div></div>
+      </div>
+
+      <table class="dim-table">
+        <thead><tr><th>Dimension</th><th>Rating</th><th></th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Architecture &amp; Design</td><td class="rating">4.5 / 5</td><td class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:90%"></span></span></td><td>Minimal, well-separated surface area appropriate to scope</td></tr>
+          <tr><td>Code Quality</td><td class="rating">4 / 5</td><td class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:80%"></span></span></td><td>Readable, consistent naming, few edge-case gaps</td></tr>
+          <tr><td>Security</td><td class="rating">3 / 5</td><td class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:60%"></span></span></td><td>No critical vulnerabilities; weak SQL guard and error disclosure</td></tr>
+          <tr><td>Performance</td><td class="rating">4 / 5</td><td class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:80%"></span></span></td><td>Streaming architecture validated at 50k rows</td></tr>
+          <tr><td>Reliability</td><td class="rating">3 / 5</td><td class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:60%"></span></span></td><td>Missing query timeout and sheet-name/duplicate validation</td></tr>
+          <tr><td>Testing</td><td class="rating">3.5 / 5</td><td class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:70%"></span></span></td><td>Strong generator coverage; orchestration class untested</td></tr>
+          <tr><td>Documentation</td><td class="rating">5 / 5</td><td class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:100%"></span></span></td><td>Exceptional — records real deployment failure modes</td></tr>
+          <tr><td>DevOps / CI</td><td class="rating">2.5 / 5</td><td class="bar-wrap"><span class="bar-track"><span class="bar-fill" style="width:50%"></span></span></td><td>No CI pipeline; CVE scan configured but manual-only</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="strengths">
+      <h2>Project Strengths</h2>
+      <div class="strength-grid">
+        <div class="strength-card">
+          <h4>Immutable, fail-fast configuration</h4>
+          <p><code>ExcelExportConfig</code> is built exclusively through a validating <code>Builder</code>; required fields throw <code>NullPointerException</code> at build time rather than surfacing as null-pointer failures deep inside generation logic.</p>
+        </div>
+        <div class="strength-card">
+          <h4>Genuinely streaming Excel generation</h4>
+          <p><code>SXSSFWorkbook</code> with a 100-row access window keeps memory flat regardless of row count, and this is backed by a real test (<code>testLargeDataset</code>) generating 50,000 rows, not just asserted in a comment.</p>
+        </div>
+        <div class="strength-card">
+          <h4>Cell-style cache avoids a real POI failure mode</h4>
+          <p><code>DataStyles</code> pre-creates and reuses 6 style combinations per workbook instead of creating one per cell — sidesteps Apache POI's hard cap on distinct cell styles per workbook, a common defect in hand-rolled exporters.</p>
+        </div>
+        <div class="strength-card">
+          <h4>Real JDBC integration tests, not mocks</h4>
+          <p><code>ExcelGeneratorTest</code> runs an in-memory H2 database and exercises the actual <code>ResultSetMetaData</code> → cell-value pipeline, catching type-mapping and formatting bugs that hand-mocked <code>ResultSet</code> objects would miss.</p>
+        </div>
+        <div class="strength-card">
+          <h4>Unusually thorough operational documentation</h4>
+          <p>The README and in-code comments record specific, empirically-verified Appian deployment failures (unsupported <code>Map[]</code> input type, i18n bundle path convention, deprecated-API constraints) and why the current approach avoids them — this is hard-won knowledge, not boilerplate.</p>
+        </div>
+        <div class="strength-card">
+          <h4>Consistent resource management</h4>
+          <p><code>Connection</code>, <code>PreparedStatement</code>, <code>ResultSet</code>, and <code>ContentOutputStream</code> are all acquired via try-with-resources; the single JDBC connection is correctly shared and reused across every sheet in one export run.</p>
+        </div>
+        <div class="strength-card">
+          <h4>Dual failure signaling</h4>
+          <p><code>run()</code> both populates the <code>ErrorMessage</code> output <em>and</em> throws <code>SmartServiceException</code>, so a calling process branching on the error output and one relying on a fault handler both see the failure — no silent continuation on a null document.</p>
+        </div>
+        <div class="strength-card">
+          <h4>Deliberate, explained dependency policy</h4>
+          <p><code>maven-enforcer-plugin</code> bans log4j, Netty, Jetty, and JUnit 4 transitively; the POI-shading relocation exception (XMLBeans left unrelocated) is justified with a specific, verified runtime failure mode rather than asserted without evidence.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="critical">
+      <h2>Critical Findings</h2>
+      <p>None identified. No hardcoded credentials, authentication/authorization bypass, remote code execution, or data-loss vectors were found in the reviewed code.</p>
+    </section>
+
+    <section id="high">
+      <h2>High Priority Findings</h2>
+
+      <article class="finding sev-high">
+        <div class="finding-head">
+          <span class="pill sev-high">High</span>
+          <span class="pill cat">Security — Injection</span>
+        </div>
+        <h4>SQL query "validation" is a superficial string check, not a real safeguard</h4>
+        <p class="loc"><code>AdvanceExcelExport.java</code> — <code>validateSheetData()</code>, lines 184–200</p>
+        <dl>
+          <dt>Description</dt>
+          <dd>The only checks applied to each sheet's SQL text are: non-blank, case-insensitive starts-with <code>SELECT</code>, and does-not-end-with <code>;</code>. There is no real SQL parsing, no statement-count check, and no defense against SQL comments, stacked expressions, vendor-specific data-exfiltration constructs (e.g. <code>SELECT ... INTO OUTFILE</code>, <code>OPENROWSET</code>), or a query that calls into a mutating stored function via a <code>SELECT</code>. The query itself is also never parameterized — the plug-in has no bind-variable mechanism, so any caller who needs to filter by a runtime value is forced into string concatenation.</dd>
+          <dt>Why it matters</dt>
+          <dd>Whether this is exploitable depends entirely on who controls the query text. Today it is presumably authored by trusted process designers at build time, but the plug-in provides no mechanism to keep it that way, and no documentation warns callers against building this string from process-variable or user-supplied data.</dd>
+          <dt>Potential impact</dt>
+          <dd>If any calling process model ever concatenates user-supplied input into a <code>SQLSheetData.sqlQuery</code> value, this becomes a classic SQL injection vector against whatever data source the JNDI name resolves to — with read access broad enough to run arbitrary <code>SELECT</code> statements, this could expose or exfiltrate data far beyond the intended report scope.</dd>
+          <dt>Recommendation</dt>
+          <dd>Document explicitly (README + input description) that <code>sqlQuery</code> must never be built from end-user input without independent parameterization/escaping upstream. Consider adding a lightweight SQL statement-count guard (reject text containing a semicolon anywhere, not just at the end) and, if feasible, a real single-statement parse check via the JDBC driver (e.g. <code>Connection.prepareStatement</code> validation combined with a statement-type check) rather than string prefix matching.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-high">
+        <div class="finding-head">
+          <span class="pill sev-high">High</span>
+          <span class="pill cat">Testing</span>
+        </div>
+        <h4>The orchestration class wired to the Appian runtime has zero test coverage</h4>
+        <p class="loc"><code>AdvanceExcelExport.java</code> — entire class (294 lines); no corresponding test file exists</p>
+        <dl>
+          <dt>Description</dt>
+          <dd>Both test files in the repository (<code>ExcelExportConfigTest</code>, <code>ExcelGeneratorTest</code>) test collaborators. <code>AdvanceExcelExport</code> itself — <code>validate()</code>'s field-level rules, <code>run()</code>'s exception wrapping, and <code>findExistingDocumentId()</code>/<code>saveAsDocument()</code>'s create-vs-overwrite branching — has no automated coverage at all.</dd>
+          <dt>Why it matters</dt>
+          <dd>This class contains the plug-in's only branching logic around document overwrite detection (<code>getByPath</code> lookup, <code>VERSION_CURRENT</code> vs. <code>UNIQUE_FOR_PARENT</code> upload mode) and its only error-surfacing logic (<code>errorMessage</code> assignment, exception rethrow). Both are exactly the kind of logic that regresses silently during refactors because nothing fails a build when it breaks.</dd>
+          <dt>Potential impact</dt>
+          <dd>A future change to the overwrite-detection logic (e.g. adjusting <code>findExistingDocumentId</code>) could silently start creating duplicate documents instead of overwriting, or vice versa, and ship without any automated signal.</dd>
+          <dt>Recommendation</dt>
+          <dd>Add a test class that exercises <code>validate()</code> against a <code>MessageContainer</code> for each rule in <code>validateSheetData</code> (missing sheet name, missing query, non-SELECT query, trailing semicolon, &gt;20 sheets), and mocks <code>ContentService</code>/<code>Context</code> to verify the create-vs-overwrite branch and the <code>SmartServiceException</code>-wrapping behavior in <code>run()</code>.</dd>
+        </dl>
+      </article>
+    </section>
+
+    <section id="medium">
+      <h2>Medium Priority Findings</h2>
+
+      <article class="finding sev-medium">
+        <div class="finding-head">
+          <span class="pill sev-medium">Medium</span>
+          <span class="pill cat">Reliability</span>
+        </div>
+        <h4>No validation for duplicate or Excel-illegal sheet names</h4>
+        <p class="loc"><code>AdvanceExcelExport.java</code> — <code>validateSheetData()</code>, lines 184–200; <code>ExcelGenerator.java</code> — <code>writeSheet()</code>, line 140</p>
+        <dl>
+          <dt>Description</dt>
+          <dd>Two or more <code>SQLSheetData</code> entries with the same (or Excel-equivalent, e.g. differing only by trailing space) sheet name, or a name violating Excel's constraints (max 31 characters; cannot contain <code>\ / ? * [ ] :</code>), are never rejected during <code>validate()</code>. They surface only when POI's <code>SXSSFWorkbook.createSheet()</code> throws <code>IllegalArgumentException</code> mid-generation.</dd>
+          <dt>Why it matters</dt>
+          <dd>Appian's <code>validate()</code> hook exists precisely to give process designers actionable, pre-execution feedback. Letting this fail during <code>run()</code> instead produces a generic POI exception message surfaced through <code>ErrorMessage</code>, which is far less actionable than a targeted validation error naming the offending sheet.</dd>
+          <dt>Potential impact</dt>
+          <dd>Process designers debug a cryptic runtime failure instead of getting immediate, specific feedback at design/validation time.</dd>
+          <dt>Recommendation</dt>
+          <dd>In <code>validateSheetData</code>, check sheet-name length (≤31), the illegal-character set, and duplicate names across the full <code>sqlSheetDataList</code> array before execution.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-medium">
+        <div class="finding-head">
+          <span class="pill sev-medium">Medium</span>
+          <span class="pill cat">Reliability</span>
+        </div>
+        <h4>No query timeout on per-sheet SQL execution</h4>
+        <p class="loc"><code>ExcelGenerator.java</code> — <code>writeSheet()</code>, lines 127–128</p>
+        <dl>
+          <dt>Description</dt>
+          <dd><code>PreparedStatement.setFetchSize(FETCH_SIZE)</code> is set, but <code>setQueryTimeout(int)</code> is never called. A slow, blocking, or accidentally unbounded query (e.g. a missing join predicate producing a cross join) can run indefinitely.</dd>
+          <dt>Why it matters</dt>
+          <dd>Appian Smart Service nodes execute synchronously within a process instance's execution thread; an unbounded query ties up that execution path with no self-imposed ceiling, relying entirely on database-side or Appian-side timeouts (if any) to eventually intervene.</dd>
+          <dt>Potential impact</dt>
+          <dd>A single misconfigured report query can hang a process instance for an extended period with no clear diagnostic pointing back to this node.</dd>
+          <dt>Recommendation</dt>
+          <dd>Call <code>statement.setQueryTimeout(...)</code> with a sane default (configurable or fixed, e.g. 120s), and ensure the resulting <code>SQLTimeoutException</code> is surfaced with a clear, sheet-named error message the same way other <code>SQLException</code>s already are.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-medium">
+        <div class="finding-head">
+          <span class="pill sev-medium">Medium</span>
+          <span class="pill cat">Reliability / Correctness</span>
+        </div>
+        <h4>Editable-column matching is case-sensitive, with no normalization</h4>
+        <p class="loc"><code>ExcelExportConfig.java</code> — <code>isEditable()</code>, line 84; <code>ExcelGenerator.java</code> — <code>writeSheet()</code>, line 137</p>
+        <dl>
+          <dt>Description</dt>
+          <dd><code>editableColumns.contains(columnName)</code> is an exact, case-sensitive string match against <code>ResultSetMetaData.getColumnLabel()</code>. Column-label casing is JDBC-driver- and database-dependent (e.g. Oracle typically uppercases unquoted identifiers, PostgreSQL lowercases them, SQL Server preserves source casing), and the test suite only exercises this against H2, which happens to return uppercase labels for the queries used.</dd>
+          <dt>Why it matters</dt>
+          <dd>A process designer who configures <code>editableColumns=["Status"]</code> against a database that returns <code>STATUS</code> or <code>status</code> gets a silently all-locked sheet with no error — matching the documented "no effect" behavior, but in a way that's easy to misconfigure and hard to notice, since the generated file still opens successfully.</dd>
+          <dt>Potential impact</dt>
+          <dd>Silent, hard-to-diagnose misconfiguration: columns intended to be editable ship locked, and vice versa, without any signal in <code>ErrorMessage</code>.</dd>
+          <dt>Recommendation</dt>
+          <dd>Normalize case on both sides of the comparison (e.g. compare via <code>equalsIgnoreCase</code> or uppercase both the configured list and the column label at lookup time), and document the chosen behavior explicitly.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-medium">
+        <div class="finding-head">
+          <span class="pill sev-medium">Medium</span>
+          <span class="pill cat">Security — Information Disclosure</span>
+        </div>
+        <h4>Raw exception messages are surfaced verbatim to the process-visible error output</h4>
+        <p class="loc"><code>AdvanceExcelExport.java</code> — <code>run()</code>, lines 219–223</p>
+        <dl>
+          <dt>Description</dt>
+          <dd><code>errorMessage = e.getMessage();</code> passes whatever message the underlying exception carries — including <code>SQLException</code> messages from the JDBC driver, which frequently embed table/column names, constraint names, or fragments of the failing query — directly into the <code>ErrorMessage</code> output and the thrown <code>SmartServiceException</code>.</dd>
+          <dt>Why it matters</dt>
+          <dd>Depending on how a calling process model surfaces <code>ErrorMessage</code> (e.g. displayed directly to an end user in a UI), this can leak internal schema details, query fragments, or JNDI/data-source configuration hints to a lower-trust audience than the process designer who wrote the query.</dd>
+          <dt>Potential impact</dt>
+          <dd>Information disclosure aiding further attack reconnaissance, or simply an unpolished/unprofessional end-user-facing error message.</dd>
+          <dt>Recommendation</dt>
+          <dd>Keep full exception detail in the SLF4J log (already done via <code>LOG.error</code>) but surface a generic, sheet-scoped message on <code>ErrorMessage</code> (e.g. <code>"Failed to generate sheet 'X' — see server logs for details"</code>) unless the process is known to only ever be consumed by trusted designers.</dd>
+        </dl>
+      </article>
+    </section>
+
+    <section id="low">
+      <h2>Low Priority &amp; Informational Findings</h2>
+
+      <article class="finding sev-low">
+        <div class="finding-head">
+          <span class="pill sev-low">Low</span>
+          <span class="pill cat">Resource Management</span>
+        </div>
+        <h4><code>POIFSFileSystem</code> is never closed in <code>encrypt()</code></h4>
+        <p class="loc"><code>ExcelGenerator.java</code> — <code>encrypt()</code>, lines 106–120</p>
+        <dl>
+          <dt>Description</dt>
+          <dd><code>fileSystem</code> is constructed, written to via <code>writeFilesystem(out)</code>, and never explicitly closed (it implements <code>Closeable</code>). Since this instance holds no external file handle (it's in-memory only), the practical leak risk is low, but it's an inconsistency against the rest of the codebase's otherwise disciplined try-with-resources usage.</dd>
+          <dt>Recommendation</dt>
+          <dd>Wrap <code>fileSystem</code> in try-with-resources for consistency and to guard against future changes that back it with a real temp file.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-low">
+        <div class="finding-head">
+          <span class="pill sev-low">Low</span>
+          <span class="pill cat">Correctness</span>
+        </div>
+        <h4><code>Color.decode</code> has surprising parsing rules for some hex inputs</h4>
+        <p class="loc"><code>ExcelGenerator.java</code> — <code>parseHexColor()</code>, lines 252–255</p>
+        <dl>
+          <dt>Description</dt>
+          <dd><code>java.awt.Color.decode</code> accepts <code>#</code>, <code>0x</code>/<code>0X</code>, or a leading <code>0</code> as octal — a color string like <code>"099AA1"</code> (no <code>#</code> prefix, leading zero) could parse as an octal literal rather than the intended hex triplet, producing a wrong color instead of the expected <code>NumberFormatException</code> fallback.</dd>
+          <dt>Recommendation</dt>
+          <dd>Normalize by always prefixing with <code>#</code> and parsing via <code>Integer.parseInt(hex, 16)</code> directly rather than delegating to <code>Color.decode</code>'s broader (and here, unwanted) number-format grammar.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-low">
+        <div class="finding-head">
+          <span class="pill sev-low">Low</span>
+          <span class="pill cat">Consistency</span>
+        </div>
+        <h4>Version string drift between <code>pom.xml</code> and <code>appian-plugin.xml</code></h4>
+        <p class="loc"><code>pom.xml</code> line 9 (<code>1.0.0-SNAPSHOT</code>) vs. <code>appian-plugin.xml</code> line 31 (<code>1.0.0</code>)</p>
+        <dl>
+          <dt>Description</dt>
+          <dd>The Maven artifact version and the plug-in descriptor's declared version are not kept in sync, and nothing enforces that they are.</dd>
+          <dt>Recommendation</dt>
+          <dd>Either inject the POM version into the descriptor via resource filtering, or add a release checklist step to bump both together.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-low">
+        <div class="finding-head">
+          <span class="pill sev-low">Low</span>
+          <span class="pill cat">Documentation Drift</span>
+        </div>
+        <h4>README overstates the test count</h4>
+        <p class="loc"><code>README.md</code>, "Test" section</p>
+        <dl>
+          <dt>Description</dt>
+          <dd>The README states "13 JUnit 5 tests"; the current suite contains 16 (6 in <code>ExcelExportConfigTest</code>, 10 in <code>ExcelGeneratorTest</code>, both verified by direct count). This is a minor drift, likely from tests added after the README was last updated, but it's the kind of small inaccuracy that erodes trust in an otherwise very reliable README.</dd>
+          <dt>Recommendation</dt>
+          <dd>Update the count, or better, drop the specific number and just state "run <code>mvn test</code>" to avoid future drift.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-info">
+        <div class="finding-head">
+          <span class="pill sev-info">Informational</span>
+          <span class="pill cat">Technical Debt</span>
+        </div>
+        <h4>Sheet structural protection depends on reflection into a private POI field</h4>
+        <p class="loc"><code>ExcelGenerator.java</code> — <code>protectSheet()</code>, lines 294–309</p>
+        <dl>
+          <dt>Description</dt>
+          <dd><code>SXSSFSheet</code> doesn't expose the underlying <code>XSSFSheet</code> needed to reach <code>CTSheetProtection</code>, so the code reaches into the private field <code>_sh</code> via reflection. This is already clearly documented as a deliberate, verified workaround, and is protected by a real regression test (<code>testEverySheetIsProtectedWithStructuralEditsAllowed</code>) — but it remains inherently fragile: a future Apache POI upgrade could rename or remove that field with no compile-time warning, only a runtime <code>ExcelGenerationException</code>.</dd>
+          <dt>Recommendation</dt>
+          <dd>No change needed now given the existing test coverage; when upgrading the <code>poi.version</code> property, re-run the full test suite specifically with this test in mind before treating the upgrade as safe.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-info">
+        <div class="finding-head">
+          <span class="pill sev-info">Informational</span>
+          <span class="pill cat">Security</span>
+        </div>
+        <h4>JNDI name is a free-text runtime input</h4>
+        <p class="loc"><code>AdvanceExcelExport.java</code> — <code>generateExcelBytes()</code>, line 228</p>
+        <dl>
+          <dt>Description</dt>
+          <dd><code>context.lookup(jndiName)</code> resolves whatever string is supplied as the <code>jndiName</code> input. This is scoped by the containing application server's JNDI namespace (not an arbitrary remote-codebase lookup as in the historical Log4Shell-style JNDI issues), so the practical risk here is low and is already flagged inline (<code>// nosemgrep</code> comment) as a reviewed, accepted pattern.</dd>
+          <dt>Recommendation</dt>
+          <dd>Document in the input description that <code>jndiName</code> must only ever reference a pre-configured, admin-approved data source name — never a value derived from end-user input.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-info">
+        <div class="finding-head">
+          <span class="pill sev-info">Informational</span>
+          <span class="pill cat">Security Hardening</span>
+        </div>
+        <h4><code>excelPassword</code> is retained as an immutable <code>String</code></h4>
+        <p class="loc"><code>ExcelExportConfig.java</code>, field <code>excelPassword</code></p>
+        <dl>
+          <dt>Description</dt>
+          <dd>Java <code>String</code> instances are immutable and not guaranteed to be promptly garbage-collected or zeroed, so the password value can linger in heap memory (and potentially in a heap dump) longer than a <code>char[]</code> that could be explicitly wiped after use.</dd>
+          <dt>Recommendation</dt>
+          <dd>Low priority given this is a short-lived, single-execution smart service, not a long-running credential store — only worth revisiting if this plug-in is later adapted to hold secrets for longer than one export's lifetime.</dd>
+        </dl>
+      </article>
+
+      <article class="finding sev-info">
+        <div class="finding-head">
+          <span class="pill sev-info">Informational</span>
+          <span class="pill cat">DevOps</span>
+        </div>
+        <h4>No CI pipeline automating build, test, or dependency scanning</h4>
+        <p class="loc">Repository root — no <code>.github/workflows</code>, no other CI configuration found</p>
+        <dl>
+          <dt>Description</dt>
+          <dd><code>mvn test</code>, the OWASP <code>dependency-check-maven</code> scan, and the <code>maven-enforcer-plugin</code> rules are all well-configured but currently only run when a developer remembers to invoke them locally.</dd>
+          <dt>Recommendation</dt>
+          <dd>Add a CI workflow running <code>mvn -B verify</code> on every push/PR, plus a scheduled (e.g. weekly) job running <code>mvn dependency-check:check</code> given it needs network access to refresh its CVE database and is explicitly excluded from the default build for that reason.</dd>
+        </dl>
+      </article>
+    </section>
+
+    <section id="architecture">
+      <h2>Architecture Review</h2>
+      <p>The plug-in follows a tight, appropriately flat structure for its scope: <code>AdvanceExcelExport</code> (the Appian-facing Smart Service, handling inputs/outputs/validation/orchestration), <code>ExcelExportConfig</code> (an immutable value object encapsulating export settings), <code>ExcelGenerator</code> (the POI-facing rendering engine), <code>SQLSheetData</code> (the plug-in's one custom data type / CDT), and <code>ExcelGenerationException</code> (a narrow unchecked wrapper). This is a reasonable application of separation of concerns: Appian-framework wiring is isolated to <code>AdvanceExcelExport</code>, and none of the POI/Excel-specific logic leaks into it. There is no over-engineering — no unnecessary interfaces, no speculative extension points, no dependency-injection framework beyond what Appian's plug-in loader itself provides via constructor-parameter recognition.</p>
+      <p>One structural observation: <code>ExcelGenerator</code> at 354 lines carries several responsibilities — SQL execution, cell-value type mapping, style creation/caching, and the reflection-based protection workaround. This is still cohesive (everything is "how to turn a ResultSet into a protected sheet") rather than a true God-class, but if further per-column formatting features are added, splitting cell-value mapping (<code>setCellValue</code>, the JDBC-type switch) into a dedicated small class would keep the file from growing into a genuine maintainability problem.</p>
+      <p>Concurrency/statefulness: <code>AdvanceExcelExport</code> holds its inputs as mutable instance fields set by Appian via setter methods, which is the SDK's documented lifecycle model. This is safe on the (reasonable, but unverified from code alone) assumption that Appian's process engine instantiates a fresh Smart Service instance per node execution rather than pooling and reusing one instance across concurrent executions; the code itself gives no explicit guarantee either way. Everything downstream (<code>ExcelExportConfig</code>, <code>ExcelGenerator</code>) is either immutable or locally-scoped per call, so no additional statefulness risk is introduced beyond what the SDK contract itself implies.</p>
+    </section>
+
+    <section id="security">
+      <h2>Security Review</h2>
+      <p>Authentication and authorization are entirely delegated to the Appian platform, which is the correct model for a Smart Service plug-in — there is no bespoke auth logic to review here, and none should exist. The security surface specific to this plug-in is: the SQL text it executes, the JNDI name it resolves, the error detail it exposes, and the password/encryption path it offers.</p>
+      <table class="dim-table">
+        <thead><tr><th>Area</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>SQL injection defense</td><td class="rating" style="color:var(--high)">Weak</td><td>Prefix/suffix string checks only — see High finding above</td></tr>
+          <tr><td>Secret handling (Excel password)</td><td class="rating" style="color:var(--good)">Adequate</td><td>Never logged; used only to drive POI's agile encryption</td></tr>
+          <tr><td>Sensitive data in logs</td><td class="rating" style="color:var(--good)">Good</td><td><code>jndiName</code> logged at debug; password and query text are not logged</td></tr>
+          <tr><td>Error message exposure</td><td class="rating" style="color:var(--medium)">Needs attention</td><td>Raw exception text reaches the process-visible output — see Medium finding above</td></tr>
+          <tr><td>Encryption implementation</td><td class="rating" style="color:var(--good)">Good</td><td>Uses POI's standard agile (AES) encryption path correctly, verified by a round-trip test</td></tr>
+          <tr><td>Dependency hygiene</td><td class="rating" style="color:var(--good)">Good</td><td>Enforcer bans log4j/Netty/Jetty/JUnit4; OWASP dependency-check configured (manual-run)</td></tr>
+          <tr><td>Deserialization risk</td><td class="rating" style="color:var(--good)">Not applicable</td><td>No Jackson/JSON parsing occurs inside this plug-in's reviewed code</td></tr>
+        </tbody>
+      </table>
+      <p>Sheet-level cell protection deserves a clarifying note rather than a finding: <code>protectSheet()</code> applies protection with an empty password by design (documented in-code), meaning any Excel user can remove it via the standard "Unprotect Sheet" UI with no real password challenge. This is appropriate given the stated intent — preventing accidental edits/structural changes to a generated report, not defending against a malicious end user — and is already correctly documented as such in both the properties file and code comments. It should not be read as a security control against a hostile file recipient.</p>
+    </section>
+
+    <section id="performance">
+      <h2>Performance Review</h2>
+      <p>The core generation path is well-engineered for its purpose. <code>SXSSFWorkbook</code> with a 100-row access window bounds heap usage independent of total row count, matched by <code>PreparedStatement.setFetchSize(100)</code> on the JDBC side so result rows are pulled from the database in batches rather than materialized all at once. The 50,000-row test (<code>testLargeDataset</code>) both documents and verifies this claim rather than leaving it as an assumption, and additionally asserts a wall-clock ceiling (&lt;60s), giving the suite an actual performance regression guard, not just a functional one.</p>
+      <p>The pre-cached <code>DataStyles</code> (6 style variants reused across every cell) avoids a well-known and easy-to-hit Apache POI failure mode — creating a new <code>CellStyle</code> per cell can exhaust the workbook's finite style-slot budget on datasets with more than a few thousand rows. This is a detail many hand-rolled Excel exporters get wrong, and it's handled correctly here.</p>
+      <p>One efficiency nit, informational-severity only: <code>ExcelExportConfig.isEditable()</code> does an O(n) <code>List.contains</code> scan per column, per row-style lookup call site (though in practice it's only called once per column during header setup — <code>editableFlags</code> is computed once and reused for all data rows, so this is not actually a hot-path cost). No change needed.</p>
+    </section>
+
+    <section id="scalability">
+      <h2>Scalability Review</h2>
+      <p>Horizontal scaling, load balancing, and distributed-system concerns are out of scope for this artifact by design: an Appian Smart Service plug-in is a synchronous unit of work executed inline within a process instance by Appian's own process engine, which already owns scaling and concurrency at the platform level. There is no service to scale independently, no request queue to size, and no shared mutable state across executions to reason about beyond what's covered in the Architecture section above.</p>
+      <p>The one scalability dimension genuinely under this plug-in's control — handling arbitrarily large result sets without proportional memory growth — is addressed correctly via the streaming architecture discussed under Performance. The <code>MAX_SHEETS = 20</code> cap is a sensible, explicit bound against unbounded workbook fan-out; there is no equivalent cap on rows-per-sheet, but given the streaming design that's a reasonable choice rather than an oversight — the limiting factor for very large sheets is generation wall-clock time and Excel's own ~1,048,576-row ceiling, not plug-in memory.</p>
+    </section>
+
+    <section id="maintainability">
+      <h2>Maintainability Review</h2>
+      <p>Naming is consistent and descriptive throughout (<code>writeHeaderRow</code>, <code>writeDataRows</code>, <code>findExistingDocumentId</code> read as exactly what they do). Comments are used correctly by this codebase's own standard — they explain <em>why</em> a non-obvious choice was made (the POI relocation exception, the reflection workaround, the deprecated-API usage) rather than restating <em>what</em> the next line does. This is a genuinely good example of comment discipline and should be treated as the standard to hold future changes to, not relaxed.</p>
+      <p>The <code>Builder</code> pattern in <code>ExcelExportConfig</code> is applied correctly and proportionately — seven fields, three of them required — this is right at the size where a builder earns its keep over a telescoping constructor, without being overkill. No dead code, no duplicated logic, and no unused fields or methods were found in the reviewed files.</p>
+    </section>
+
+    <section id="testing">
+      <h2>Testing Review</h2>
+      <p><code>ExcelExportConfigTest</code> (6 tests) covers the builder's validation and default-value substitution logic completely — every branch in the constructor and required-field check has a corresponding assertion. <code>ExcelGeneratorTest</code> (10 tests) is the stronger of the two suites: it verifies structural protection flags directly against the underlying <code>CTSheetProtection</code> XML model (not just POI's higher-level API), verifies encryption via an actual password-verify-and-decrypt round trip rather than only checking the file "looks encrypted," and includes both a multi-sheet cross-shape test and the large-dataset performance-adjacent test discussed above.</p>
+      <p>The gap, covered as a High finding above, is <code>AdvanceExcelExport</code> itself. Beyond adding coverage for <code>validate()</code> and the create/overwrite branch, a mocked-<code>DataSource</code> test of <code>generateExcelBytes()</code>'s JNDI-lookup-failure path (what happens when <code>context.lookup()</code> throws or returns something that isn't a <code>DataSource</code>) would also close a real edge case: today, a <code>ClassCastException</code> from the unchecked cast on line 228 would propagate as a generic, unhelpful error message rather than a targeted "JNDI name did not resolve to a data source" message.</p>
+    </section>
+
+    <section id="observability">
+      <h2>Observability Review</h2>
+      <p>Logging is present at appropriate levels throughout the generation path (<code>debug</code> for per-sheet start and JNDI lookup, <code>info</code> for completion, <code>warn</code> for the recoverable invalid-header-color fallback, <code>error</code> for terminal failures) via SLF4J, correctly left at <code>provided</code> scope so Appian's own logging backend and routing apply. There are no metrics, distributed tracing, or health-check endpoints — this is appropriate for a synchronous, in-process plug-in with no independent runtime to monitor; Appian's own process-instance audit trail and admin console already provide execution-level visibility for this kind of node. No changes recommended here beyond what's already in place.</p>
+    </section>
+
+    <section id="devops">
+      <h2>DevOps Review</h2>
+      <p>The Maven build is well-configured for an Appian plug-in specifically: <code>maven-shade-plugin</code> relocates POI to avoid classpath conflicts with Appian's own bundled version (with a documented, specific reason for the one exception), <code>release&gt;11&lt;/release&gt;</code> on the compiler plugin correctly gates against the real Java 11 API surface even when building on a newer JDK, and the enforcer/versions/dependency-check plugins are all present and correctly scoped (network-dependent CVE scanning deliberately kept out of the default build lifecycle). The one gap is automation: none of this — build, test, or scan — currently runs anywhere other than a developer's own machine. See the DevOps informational finding above for the specific recommendation.</p>
+    </section>
+
+    <section id="tech-debt">
+      <h2>Technical Debt</h2>
+      <div class="table-scroll">
+        <table class="data">
+          <thead><tr><th>Item</th><th>Location</th><th>Debt type</th><th>Payoff trigger</th></tr></thead>
+          <tbody>
+            <tr><td>Reflection into POI's private <code>_sh</code> field</td><td><code>ExcelGenerator.protectSheet()</code></td><td>Fragile dependency on undocumented internals</td><td>Re-verify on every <code>poi.version</code> bump</td></tr>
+            <tr><td>No SQL statement parser, only string prefix/suffix checks</td><td><code>AdvanceExcelExport.validateSheetData()</code></td><td>Shallow validation masquerading as a safeguard</td><td>Before opening this input to less-trusted process designers</td></tr>
+            <tr><td>Version string not shared between <code>pom.xml</code> and <code>appian-plugin.xml</code></td><td>Both files</td><td>Manual sync burden</td><td>Next release cut</td></tr>
+            <tr><td><code>ContentService.upload()</code> deprecated-API dependency</td><td><code>AdvanceExcelExport.saveAsDocument()</code></td><td>SDK-imposed, already fully documented and justified</td><td>If/when the SDK exposes a working non-deprecated path</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="refactoring">
+      <h2>Recommended Refactoring Opportunities</h2>
+      <ul>
+        <li><strong>Extract cell-value mapping.</strong> Move <code>setCellValue()</code>'s JDBC-<code>Types</code> switch out of <code>ExcelGenerator</code> into a small dedicated <code>JdbcCellValueWriter</code>-style helper if any further per-type formatting (e.g. currency, percentage) is added — keeps <code>ExcelGenerator</code> focused on sheet/style orchestration.</li>
+        <li><strong>Centralize sheet-name validation.</strong> A single <code>SheetNameValidator</code> (or a static method) used both by <code>AdvanceExcelExport.validate()</code> and, defensively, by <code>ExcelGenerator.writeSheet()</code> would close the Medium finding above without duplicating the Excel naming-rule constants in two places.</li>
+        <li><strong>Introduce a narrow SQL-shape check.</strong> A small utility that rejects embedded semicolons anywhere (not just a trailing one) and multiple top-level <code>SELECT</code> keywords would meaningfully raise the bar over the current prefix/suffix check without requiring a full SQL parser dependency.</li>
+      </ul>
+    </section>
+
+    <section id="quick-wins">
+      <h2>Quick Wins</h2>
+      <ul>
+        <li>Normalize <code>editableColumns</code>/column-label comparison to be case-insensitive (single-line change in <code>ExcelExportConfig.isEditable</code>).</li>
+        <li>Wrap the <code>POIFSFileSystem</code> in <code>encrypt()</code> with try-with-resources.</li>
+        <li>Replace <code>Color.decode</code> with a direct <code>Integer.parseInt(hex, 16)</code> parse to avoid octal-literal surprises.</li>
+        <li>Add <code>statement.setQueryTimeout(...)</code> in <code>ExcelGenerator.writeSheet()</code>.</li>
+        <li>Correct the README's stated test count (or de-specify it).</li>
+        <li>Reject embedded semicolons anywhere in the SQL text, not only a trailing one.</li>
+      </ul>
+    </section>
+
+    <section id="long-term">
+      <h2>Long-Term Recommendations</h2>
+      <ul>
+        <li>Build a unit test suite for <code>AdvanceExcelExport</code> covering <code>validate()</code>, the document create/overwrite branch, and exception-to-output mapping, using mocked <code>ContentService</code>/<code>Context</code> instances.</li>
+        <li>Stand up a CI workflow (build + test on every change; scheduled dependency-check run) so the already-well-configured Maven quality gates actually execute automatically rather than depending on developer discipline.</li>
+        <li>Once the plug-in has real deployment history, add an explicit <code>&lt;application-version min="..."/&gt;</code> to <code>appian-plugin.xml</code> once the minimum supported Appian version is confirmed (already flagged as a known, deliberate gap in the descriptor's own comments).</li>
+        <li>If usage broadens beyond trusted process designers authoring the SQL text directly, revisit the injection-hardening recommendations under Security before that trust boundary changes.</li>
+      </ul>
+    </section>
+
+    <section id="assessment">
+      <h2>Overall Assessment</h2>
+      <p>This is a small, focused, and genuinely well-executed plug-in for the problem it solves. Its architecture is proportionate to its scope, its streaming Excel generation is correctly engineered and tested against a realistic large-dataset scenario, and its documentation is meaningfully above the bar typically seen in projects of this size — it captures specific, verified production failure modes rather than generic advice. The gaps identified are concentrated and addressable: strengthen SQL input validation and its documentation, close the test-coverage hole around the Appian-facing orchestration class, and tighten a handful of edge cases (case-sensitive column matching, sheet-name validation, query timeouts). None of them are architectural — they're all additive hardening on top of a sound foundation, achievable without restructuring anything.</p>
+    </section>
+
+    <section id="recommendation">
+      <h2>Final Recommendation</h2>
+      <div class="verdict-banner">
+        <span class="verdict-tag">APPROVE WITH COMMENTS</span>
+        <p>Safe to deploy as-is for use by trusted process designers. Address the two High findings (SQL validation documentation/hardening, orchestration-class test coverage) before broadening adoption to less-trusted callers or process models that might build query text from dynamic input.</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="report-footer">
+  Reviewed files: <code>AdvanceExcelExport.java</code>, <code>ExcelExportConfig.java</code>, <code>ExcelGenerator.java</code>, <code>ExcelGenerationException.java</code>, <code>SQLSheetData.java</code>, <code>ExcelExportConfigTest.java</code>, <code>ExcelGeneratorTest.java</code>, <code>pom.xml</code>, <code>appian-plugin.xml</code>, <code>advanceExcelExport_en_US.properties</code>, <code>README.md</code>. All findings are grounded directly in this source; no external dependency source (Apache POI, Appian SDK internals) was inspected beyond what the plug-in's own code and comments reference.
+</footer>
+</body>
+</html>
