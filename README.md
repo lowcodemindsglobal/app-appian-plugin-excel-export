@@ -37,6 +37,24 @@ mvn install:install-file -Dfile=lib/appian-plug-in-sdk.jar \
   -Dversion=25.0.0-local -Dpackaging=jar
 ```
 
+## Compatibility
+
+Requires **Appian 24.4 or later** (declared as
+`<application-version min="24.4"/>` in `appian-plugin.xml`). This is a
+confirmed floor, not a guess: an earlier `min="25.1"` failed to deploy
+against a real Appian instance running 24.4.460.0 with "requires a minimum
+version of 25.1.0. The installed version of Appian is 24.4.460.0" - the
+plugin loader rejects the version gate before loading a single class, so
+setting this too high hard-blocks deployment outright. The
+`appian-plugin-sdk:25.0.0-local` coordinate this project compiles against
+(see below) is just a placeholder version string with no real bearing on the
+minimum supported release - don't infer a floor from it. Documenting this is
+also required by Appian's
+[AppMarket Submission Policies for Plug-Ins](https://docs.appian.com/suite/help/26.6/Shared_Components.html):
+plug-ins without clearly documented version compatibility are removed from
+the AppMarket, and the policy applies even for private Appian Cloud
+deployment, not just public AppMarket listing.
+
 ## Logging
 
 The plug-in logs via SLF4J (`org.slf4j.Logger`), `provided` scope - Appian's

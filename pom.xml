@@ -116,6 +116,27 @@
 
   <build>
     <finalName>${project.artifactId}-${project.version}</finalName>
+    <!--
+      Appian's AppMarket Submission Policies for Plug-Ins require the source
+      code to be included WITHIN the executable, not shipped as a separate
+      sources JAR that could be deployed without it - a plain
+      maven-source-plugin sources-jar wouldn't satisfy that. Declaring
+      src/main/java as an extra resource directory copies each .java file into
+      target/classes right next to its compiled .class file (same package
+      path, different extension, so no collision), which the shade plugin then
+      packages into the one deployed JAR along with everything else in
+      target/classes. Declaring <resources> at all replaces Maven's default
+      list, so src/main/resources (appian-plugin.xml, the i18n bundle, icons)
+      must be re-listed explicitly here or it stops being packaged.
+    -->
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <resource>
+        <directory>src/main/java</directory>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

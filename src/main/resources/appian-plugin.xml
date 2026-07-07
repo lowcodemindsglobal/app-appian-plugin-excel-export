@@ -30,12 +30,21 @@
     <vendor name="LowCodeMinds" url="https://www.lowcodeminds.com"/>
     <version>1.0.0</version>
     <!--
-      application-version's "min" attribute (minimum supported Appian version) is
-      left unset on purpose: the target environment was only confirmed as
-      "Appian version greater than 25", not a specific release number. Fill this
-      in once the exact minimum supported version is known, e.g.:
-      <application-version min="25.1"/>
+      24.4 is the actual confirmed floor, not a guess: a real deployment
+      attempt against a live Appian instance running 24.4.460.0 failed the
+      version gate with min="25.1" set ("requires a minimum version of 25.1.0.
+      The installed version of Appian is 24.4.460.0"), proving the earlier
+      "Appian version greater than 25" assumption wrong before this plug-in
+      ever got past that check to load a single class. 25.0.0-local (the
+      appian-plugin-sdk coordinate this project compiles against, see
+      pom.xml) remains just a placeholder version string with no real bearing
+      on the minimum supported release - don't infer a floor from it again.
+      Also documented in the README's compatibility section. Appian's
+      AppMarket Submission Policies for Plug-Ins require clearly documented
+      version compatibility - undocumented plug-ins are removed from the
+      AppMarket.
     -->
+    <application-version min="24.4"/>
   </plugin-info>
 
   <!-- Data Type -->

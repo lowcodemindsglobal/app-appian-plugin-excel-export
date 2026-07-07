@@ -108,19 +108,20 @@ public final class ExcelGenerator {
    * read back and re-saved into an encrypted POIFS container.
    */
   public static byte[] encrypt(byte[] xlsxBytes, String password) throws IOException, GeneralSecurityException, InvalidFormatException {
-    POIFSFileSystem fileSystem = new POIFSFileSystem();
     EncryptionInfo encryptionInfo = new EncryptionInfo(EncryptionMode.agile);
     Encryptor encryptor = encryptionInfo.getEncryptor();
     encryptor.confirmPassword(password);
 
-    try (OPCPackage opcPackage = OPCPackage.open(new ByteArrayInputStream(xlsxBytes));
-        OutputStream encryptedStream = encryptor.getDataStream(fileSystem)) {
-      opcPackage.save(encryptedStream);
-    }
+    try (POIFSFileSystem fileSystem = new POIFSFileSystem()) {
+      try (OPCPackage opcPackage = OPCPackage.open(new ByteArrayInputStream(xlsxBytes));
+          OutputStream encryptedStream = encryptor.getDataStream(fileSystem)) {
+        opcPackage.save(encryptedStream);
+      }
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    fileSystem.writeFilesystem(out);
-    return out.toByteArray();
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      fileSystem.writeFilesystem(out);
+      return out.toByteArray();
+    }
   }
 
   private void writeSheet(SXSSFWorkbook workbook, Connection connection, SQLSheetData sheetData,
