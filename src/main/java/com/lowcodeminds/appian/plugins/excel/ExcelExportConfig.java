@@ -78,10 +78,15 @@ public final class ExcelExportConfig {
   /**
    * @return true if this column should be left unlocked (editable) in every
    *     generated sheet; false if it should be locked, including for any
-   *     column name that doesn't appear in {@link #getEditableColumns()} at all
+   *     column name that doesn't appear in {@link #getEditableColumns()} at all.
+   *     Matched case-insensitively, since {@code ResultSetMetaData} column-label
+   *     casing is JDBC-driver/database-dependent (e.g. Oracle uppercases
+   *     unquoted identifiers, PostgreSQL lowercases them) and a process designer
+   *     configuring this list has no reliable way to predict which casing a
+   *     given data source will actually return.
    */
   public boolean isEditable(String columnName) {
-    return editableColumns.contains(columnName);
+    return columnName != null && editableColumns.stream().anyMatch(columnName::equalsIgnoreCase);
   }
 
   public static Builder builder() {

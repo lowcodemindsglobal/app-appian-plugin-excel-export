@@ -32,6 +32,9 @@ import java.sql.Connection;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 /**
  * Smart Service node: runs one SQL query per sheet against a JNDI data source and
@@ -80,15 +83,25 @@ public class AdvanceExcelExport extends AppianSmartService {
   private static final int MAX_SHEETS = 20;
   private static final String SQL_SHEET_DATA_LIST_INPUT = "SQLSheetDataList";
 
+  // Excel's own hard limit on sheet-name length (Sheet.setSheetName in POI throws
+  // past this), checked here so it surfaces as a validate() error instead of a
+  // raw POI IllegalArgumentException mid-run().
+  private static final int MAX_SHEET_NAME_LENGTH = 31;
+  // Characters Excel forbids anywhere in a sheet name.
+  private static final Pattern ILLEGAL_SHEET_NAME_CHARACTERS = Pattern.compile("[\\\\/?*\\[\\]:]");
+
   // Message-bundle keys, resolved against this plug-in's registered resource
   // bundle (see advanceExcelExport_en_US.properties) by MessageContainer.addError
   // and by SmartServiceException.Builder - never literal, hardcoded message text.
   private static final String ERROR_SQL_SHEET_DATA_LIST_EMPTY = "advanceExcelExport.error.sqlSheetDataListEmpty";
   private static final String ERROR_TOO_MANY_SHEETS = "advanceExcelExport.error.tooManySheets";
   private static final String ERROR_SHEET_NAME_MISSING = "advanceExcelExport.error.sheetNameMissing";
+  private static final String ERROR_SHEET_NAME_TOO_LONG = "advanceExcelExport.error.sheetNameTooLong";
+  private static final String ERROR_SHEET_NAME_ILLEGAL_CHARACTERS = "advanceExcelExport.error.sheetNameIllegalCharacters";
+  private static final String ERROR_DUPLICATE_SHEET_NAME = "advanceExcelExport.error.duplicateSheetName";
   private static final String ERROR_SQL_QUERY_MISSING = "advanceExcelExport.error.sqlQueryMissing";
   private static final String ERROR_SQL_QUERY_NOT_SELECT = "advanceExcelExport.error.sqlQueryNotSelect";
-  private static final String ERROR_SQL_QUERY_TRAILING_SEMICOLON = "advanceExcelExport.error.sqlQueryTrailingSemicolon";
+  private static final String ERROR_SQL_QUERY_CONTAINS_SEMICOLON = "advanceExcelExport.error.sqlQueryContainsSemicolon";
   private static final String ERROR_EXECUTION_FAILED = "advanceExcelExport.error.executionFailed";
 
   private final SmartServiceContext smartServiceContext;
@@ -202,14 +215,28 @@ public class AdvanceExcelExport extends AppianSmartService {
       messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_TOO_MANY_SHEETS, MAX_SHEETS);
     }
 
+    // Excel sheet names collide case-insensitively ("Sheet1" and "SHEET1" are the
+    // same name), so duplicates are tracked the same way.
+    Set<String> seenSheetNames = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
     for (SQLSheetData sheetData : sqlSheetDataList) {
-      validateSheetData(messages, sheetData);
+      validateSheetData(messages, sheetData, seenSheetNames);
     }
   }
 
-  private void validateSheetData(MessageContainer messages, SQLSheetData sheetData) {
-    if (sheetData.getSheetName() == null || sheetData.getSheetName().isBlank()) {
+  private void validateSheetData(MessageContainer messages, SQLSheetData sheetData, Set<String> seenSheetNames) {
+    String sheetName = sheetData.getSheetName();
+    if (sheetName == null || sheetName.isBlank()) {
       messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SHEET_NAME_MISSING);
+    } else {
+      if (sheetName.length() > MAX_SHEET_NAME_LENGTH) {
+        messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SHEET_NAME_TOO_LONG, sheetName, MAX_SHEET_NAME_LENGTH);
+      }
+      if (ILLEGAL_SHEET_NAME_CHARACTERS.matcher(sheetName).find()) {
+        messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SHEET_NAME_ILLEGAL_CHARACTERS, sheetName);
+      }
+      if (!seenSheetNames.add(sheetName)) {
+        messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_DUPLICATE_SHEET_NAME, sheetName);
+      }
     }
 
     String sqlQuery = sheetData.getSqlQuery();
@@ -220,8 +247,13 @@ public class AdvanceExcelExport extends AppianSmartService {
     if (!sqlQuery.trim().toUpperCase().startsWith("SELECT")) {
       messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SQL_QUERY_NOT_SELECT);
     }
-    if (sqlQuery.trim().endsWith(";")) {
-      messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SQL_QUERY_TRAILING_SEMICOLON);
+    // Rejects a semicolon anywhere, not just a trailing one, to close off the
+    // simplest stacked-statement injection shape - this is a cheap string check,
+    // not a real SQL parser, so it can also reject a legitimate semicolon inside
+    // a quoted string literal; that tradeoff is intentional (see README/plug-in
+    // review notes) given no SQL-parser dependency is in scope for this plug-in.
+    if (sqlQuery.contains(";")) {
+      messages.addError(SQL_SHEET_DATA_LIST_INPUT, ERROR_SQL_QUERY_CONTAINS_SEMICOLON);
     }
   }
 
@@ -243,10 +275,14 @@ public class AdvanceExcelExport extends AppianSmartService {
       this.newDocumentCreated = saveAsDocument(excelBytes, config);
       LOG.info("Excel export completed, documentId={}", newDocumentCreated);
     } catch (Exception e) {
+      // Full exception detail (which, for a SQLException, can embed table/column/
+      // constraint names or query fragments) goes to the log only. The
+      // process-visible ErrorMessage output stays a generic, fixed message with
+      // no exception text substituted in, so a lower-trust audience viewing that
+      // output in a calling process can't learn schema/query details from it.
       LOG.error("Error generating Excel from SQL", e);
       SmartServiceException smartServiceException = new SmartServiceException.Builder(getClass(), e)
           .userMessage(ERROR_EXECUTION_FAILED)
-          .addCauseToUserMessageArgs()
           .build();
       errorMessage = smartServiceException.getAttendedUserMessage(smartServiceContext.getPrimaryLocale());
       throw smartServiceException;

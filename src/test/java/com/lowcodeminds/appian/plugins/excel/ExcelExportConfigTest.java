@@ -48,6 +48,19 @@ class ExcelExportConfigTest {
   }
 
   @Test
+  void testIsEditableMatchesRegardlessOfColumnLabelCasing() {
+    // A process designer configures the column name however they like; the
+    // actual ResultSetMetaData label casing at query time is driver/database-
+    // dependent (Oracle uppercases, PostgreSQL lowercases, etc.), so the match
+    // must not depend on either side's casing.
+    ExcelExportConfig config = baseConfig().editableColumns(List.of("Status")).build();
+
+    assertTrue(config.isEditable("STATUS"));
+    assertTrue(config.isEditable("status"));
+    assertTrue(config.isEditable("StAtUs"));
+  }
+
+  @Test
   void testBlankDateFormatsFallBackToDefaults() {
     ExcelExportConfig config = baseConfig().dateFormat(" ").dateTimeFormat("").build();
 

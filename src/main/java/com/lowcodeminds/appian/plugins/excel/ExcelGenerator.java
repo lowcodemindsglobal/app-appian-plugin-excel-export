@@ -50,6 +50,10 @@ public final class ExcelGenerator {
 
   private static final int ROW_ACCESS_WINDOW_SIZE = 100;
   private static final int FETCH_SIZE = 100;
+  // A Smart Service node runs synchronously inside a process instance's own
+  // execution thread, so a runaway per-sheet query (e.g. a missing join
+  // predicate) has no other ceiling on it without this.
+  private static final int QUERY_TIMEOUT_SECONDS = 120;
 
   // POI column widths are in units of 1/256th of a character width, so 5000
   // is roughly 19-20 characters wide - a reasonable default for most columns.
@@ -126,6 +130,7 @@ public final class ExcelGenerator {
 
     try (PreparedStatement statement = connection.prepareStatement(sheetData.getSqlQuery())) {
       statement.setFetchSize(FETCH_SIZE);
+      statement.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
       try (ResultSet resultSet = statement.executeQuery()) {
         ResultSetMetaData metadata = resultSet.getMetaData();
         int columnCount = metadata.getColumnCount();
