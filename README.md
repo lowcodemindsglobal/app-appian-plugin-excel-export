@@ -1,9 +1,10 @@
 # app-appian-plugin-excel-export
 
-Appian Smart Service plug-in that exports data rows to a `.xlsx` file with
-column-level cell protection: designated columns are editable, all others
-(including headers) are locked, and row/column insertion and deletion are
-blocked.
+Appian Smart Service plug-in that runs one or more SQL queries against a
+JNDI-configured data source and exports the combined results to a
+multi-sheet `.xlsx` file with column-level cell protection: designated
+columns are editable, all others (including headers) are locked, and
+row/column insertion and deletion are blocked.
 
 This project follows the structure and conventions described in Appian's
 official plug-in documentation and best-practices guide, cross-checked
@@ -68,8 +69,10 @@ explicitly banned by the `maven-enforcer-plugin` rule in `pom.xml`, matching
 mvn test
 ```
 
-13 JUnit 5 tests cover `ColumnProtectionConfig` validation and `ExcelGenerator`
-protection logic, including a 50,000-row generation test.
+27 JUnit 5 tests across three classes: `AdvanceExcelExportTest` (smart-service
+`validate()` rules - sheet count/name/SQL checks), `ExcelExportConfigTest`
+(config building and editable-column matching), and `ExcelGeneratorTest`
+(protection logic and encryption, including a 50,000-row generation test).
 
 ## Dependency vulnerability scan
 
@@ -91,7 +94,7 @@ they show up anywhere in the dependency tree, transitively or not.
 ```
 src/main/resources/
   appian-plugin.xml                                        # plug-in descriptor, JAR root
-  com.lowcodeminds.plugins.advance-excel-export/
+  com/lowcodeminds/plugins/advance-excel-export/
     advanceExcelExport_en_US.properties                     # i18n: labels, tooltips - locale suffix required, see file header comment
     advanceExcelExport/images/
       palette-icon.svg                                      # 27x19, placeholder artwork
@@ -99,10 +102,16 @@ src/main/resources/
 ```
 
 These resource paths are derived from the plug-in's `key`
-(`com.lowcodeminds.plugins.advance-excel-export`, kept as a literal folder
-name - dots are not converted to nested package folders), not its display
-`name` - renaming the key without also moving these paths leaves the
-properties/icons undiscoverable.
+(`com.lowcodeminds.plugins.advance-excel-export`), not its display `name`.
+Appian resolves the i18n bundle the same way
+`java.util.ResourceBundle.getBundle()` always has - by joining
+`<plugin-key>.<smart-service-key>` into a single basename and treating
+**every dot as a directory separator**, so the path must be fully nested
+(`com/lowcodeminds/plugins/advance-excel-export/...`), not a single folder
+literally named with dots. See the header comment in
+`advanceExcelExport_en_US.properties` for the real deployment failure
+(`APNX-1-4200-000`) that a flat, literal-dot folder produced - do not revert
+to that layout.
 
 ## Deploy
 
@@ -113,24 +122,45 @@ properties/icons undiscoverable.
 3. Replace the placeholder `palette-icon.svg` / `canvas-icon.svg` with real
    branded artwork before a production release (optional - the reference
    sibling plug-in shipped successfully with no icons at all).
-4. The i18n bundle's resource-path convention (see comments in
-   `advanceExcelExport_en_US.properties`) is verified against fast-excel, a
-   real, deployed sibling plug-in whose properties file lives directly under
-   a folder named literally as its plug-in key, with a required locale suffix
-   on the filename (`writeSQLToExcelV1_en_US.properties`). An earlier version
-   of this file used a different, unverified convention (dots-as-nested-folders,
-   no locale suffix) that empirically failed in a real deployment - input/output
-   labels rendered as auto-generated fallbacks instead of the `.label` values.
-   If labels ever regress to that fallback again, check this file's path first.
+4. The i18n bundle's resource-path convention (see the header comment in
+   `advanceExcelExport_en_US.properties`) is confirmed by a real deployment
+   failure, not a guess: an earlier version placed the file directly under a
+   single folder literally named `com.lowcodeminds.plugins.advance-excel-export`
+   (dots kept as literal characters, modeled on an unverified assumption about
+   a sibling plug-in's layout) and deployment failed with `APNX-1-4200-000:
+   missing internationalization bundle(s) for Locale en_US`. The bundle must
+   instead live at the fully nested path
+   `com/lowcodeminds/plugins/advance-excel-export/advanceExcelExport_en_US.properties`,
+   matching how `java.util.ResourceBundle.getBundle()` always treats dots in a
+   basename - every dot is a directory separator, none are literal. If labels
+   ever regress to auto-generated fallbacks again, check this file's path first.
 
-## Input contract: `dataRowsJson` is a JSON string, not a Dictionary array
+## Input contract
 
-The calling process model must pass the export rows as a JSON-encoded string
-(e.g. `a!toJson(rows)`), not as a native Appian "List of Dictionary" value.
+`AdvanceExcelExport` takes one query per output sheet, run directly against a
+JNDI-configured data source - it does not take pre-fetched rows:
 
-This was discovered the hard way: an earlier version declared this input as
-`Map<String, Object>[]`, which passed local unit tests and `mvn package`
-cleanly but **failed to deploy** against a real Appian server with:
+| Input | Required | Description |
+|---|---|---|
+| `SQLSheetDataList` (`SQLSheetData[]`) | Always | One entry per output sheet: a `sqlQuery` (`SELECT` only, no semicolons) and its `sheetName`. Max 20 entries, unique sheet names ≤31 chars, no illegal Excel characters. |
+| `jndiName` | Always | JNDI name of the pre-configured data source each query runs against. |
+| `editableColumns` (`String[]`) | Optional | Column names (matched case-insensitively across all sheets) left unlocked; everything else, including headers, is locked. |
+| `targetFolder` | Always | Appian folder to save the generated document in. |
+| `NewDocumentName` | Always | Document name (no extension). |
+| `DateFormat` / `DateTimeFormat` | Optional | Excel number formats for DATE/TIMESTAMP columns (default `dd-mm-yyyy` / `dd-mm-yyyy hh:mm:ss`). |
+| `NoneEditableHeaderColor` | Optional | Hex fill color for locked-column headers. |
+| `ExcelPassword` | Optional | If set, encrypts the whole file for opening, in addition to the always-on cell/structural protection. |
+
+`SQLSheetData` is a plug-in-defined CDT (`<datatype key="SQLSheetData">` in
+`appian-plugin.xml`, backed by the JAXB-annotated
+`com.lowcodeminds.appian.plugins.excel.SQLSheetData`), not a JSON string -
+Appian's plugin loader supports custom CDT arrays as an `@Input` type
+directly, no serialization workaround needed.
+
+This wasn't the first design tried. An early version accepted pre-fetched
+rows as a raw `Map<String, Object>[]` (Dictionary array), which passed local
+unit tests and `mvn package` cleanly but **failed to deploy** against a real
+Appian server with:
 
 ```
 com.appiancorp.suiteapi.type.exceptions.InvalidTypeException: ...
@@ -138,16 +168,13 @@ Invalid Type: Unsupported type [Ljava.util.Map; (APNX-1-4047-000)
 ```
 
 Appian's plugin loader scans every `@Input`/`@Output` method against a fixed
-table of Java-to-Appian type mappings, and a raw `Map[]` isn't in it - nor
-does the SDK expose an annotation plugin authors can use to declare one
-(only pre-built convenience annotations like `@DocumentDataType` exist; none
-covers Dictionary). One bad input type disables the *entire* node at load
-time, regardless of the other inputs being fine.
-
-`AdvanceExcelExport` parses `dataRowsJson` with Jackson
-(`ObjectMapper.readValue`) inside `run()` instead - `String` is unambiguously
-supported, sidestepping the problem entirely. Same pattern as
-`appian-header-match-plugin`'s `existingMappingsJson` input.
+table of Java-to-Appian type mappings, and a raw `Map[]` isn't in it - one bad
+input type disables the *entire* node at load time, regardless of the other
+inputs being fine. That design was replaced first with a JSON-encoded
+`dataRowsJson` string (parsed with Jackson - the same `String`-input
+workaround `appian-header-match-plugin`'s `existingMappingsJson` uses), and
+then, once the current SQL/JNDI, multi-sheet requirement was settled, with
+the `SQLSheetData[]` CDT design described above.
 
 ## Known caveat
 
