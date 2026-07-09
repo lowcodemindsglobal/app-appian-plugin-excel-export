@@ -149,6 +149,7 @@ public final class ExcelGenerator {
         }
 
         SXSSFSheet sheet = workbook.createSheet(sheetName);
+        sheet.createFreezePane(0, 1);
         writeHeaderRow(sheet, columnLabels, editableFlags, nonEditableHeaderStyle, editableHeaderStyle);
         writeDataRows(sheet, resultSet, metadata, columnCount, editableFlags, dataStyles);
 

@@ -196,6 +196,24 @@ class ExcelGeneratorTest {
   }
 
   @Test
+  void testHeaderRowIsFrozenOnEverySheet() throws Exception {
+    ExcelExportConfig config = baseConfig().editableColumns(List.of()).build();
+
+    List<SQLSheetData> sheets = List.of(
+        sheet("One", "SELECT employee_id FROM employees"),
+        sheet("Two", "SELECT department FROM employees"));
+
+    byte[] excelBytes = new ExcelGenerator(config).generate(connection, sheets);
+
+    try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(excelBytes))) {
+      for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+        XSSFSheet sheet = workbook.getSheetAt(i);
+        assertEquals(1, sheet.getPaneInformation().getHorizontalSplitTopRow(), "sheet " + i + " should freeze the header row");
+      }
+    }
+  }
+
+  @Test
   void testEverySheetIsProtectedWithStructuralEditsAllowed() throws Exception {
     ExcelExportConfig config = baseConfig().editableColumns(List.of()).build();
 
