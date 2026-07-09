@@ -119,7 +119,7 @@ class ExcelGeneratorTest {
   }
 
   @Test
-  void testDefaultHeaderColorsAreTwoTone() throws Exception {
+  void testDefaultHeaderColorsAreYellow() throws Exception {
     ExcelExportConfig config = baseConfig().editableColumns(List.of("STATUS")).build();
 
     byte[] excelBytes = new ExcelGenerator(config).generate(connection,
@@ -130,8 +130,24 @@ class ExcelGeneratorTest {
     short nonEditableColor = header.getCell(0).getCellStyle().getFillForegroundColor();
     short editableColor = header.getCell(1).getCellStyle().getFillForegroundColor();
 
-    assertEquals(IndexedColors.GREY_25_PERCENT.getIndex(), nonEditableColor, "non-editable header should default to light gray");
-    assertEquals(IndexedColors.GREY_50_PERCENT.getIndex(), editableColor, "editable header should always be dark gray");
+    assertEquals(IndexedColors.YELLOW.getIndex(), nonEditableColor, "non-editable header should default to yellow");
+    assertEquals(IndexedColors.YELLOW.getIndex(), editableColor, "editable header should always be yellow");
+  }
+
+  @Test
+  void testDataCellColorsReflectEditability() throws Exception {
+    ExcelExportConfig config = baseConfig().editableColumns(List.of("STATUS")).build();
+
+    byte[] excelBytes = new ExcelGenerator(config).generate(connection,
+        List.of(sheet("Employees", "SELECT employee_id, status FROM employees ORDER BY employee_id")));
+
+    XSSFSheet sheet = readBack(excelBytes, 0);
+    Row row = sheet.getRow(1);
+    short nonEditableColor = row.getCell(0).getCellStyle().getFillForegroundColor();
+    short editableColor = row.getCell(1).getCellStyle().getFillForegroundColor();
+
+    assertEquals(IndexedColors.GREY_25_PERCENT.getIndex(), nonEditableColor, "non-editable data cells should be light gray");
+    assertEquals(IndexedColors.GREY_50_PERCENT.getIndex(), editableColor, "editable data cells should be dark gray");
     assertNotEquals(nonEditableColor, editableColor);
   }
 

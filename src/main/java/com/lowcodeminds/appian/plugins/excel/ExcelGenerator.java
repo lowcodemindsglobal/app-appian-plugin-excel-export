@@ -60,10 +60,15 @@ public final class ExcelGenerator {
   private static final int DEFAULT_COLUMN_WIDTH = 5000;
 
   // Default header fill when NoneEditableHeaderColor isn't supplied. Editable
-  // column headers always use the darker shade below - there's no separate
+  // column headers always use the fixed color below - there's no separate
   // input to override that side, only the non-editable one.
-  private static final short DEFAULT_NON_EDITABLE_HEADER_COLOR = IndexedColors.GREY_25_PERCENT.getIndex();
-  private static final short EDITABLE_HEADER_COLOR = IndexedColors.GREY_50_PERCENT.getIndex();
+  private static final short DEFAULT_NON_EDITABLE_HEADER_COLOR = IndexedColors.YELLOW.getIndex();
+  private static final short EDITABLE_HEADER_COLOR = IndexedColors.YELLOW.getIndex();
+
+  // Data cell fill colors: non-editable (locked) cells get a light gray
+  // background, editable (unlocked) cells get a dark gray background.
+  private static final short NON_EDITABLE_DATA_COLOR = IndexedColors.GREY_25_PERCENT.getIndex();
+  private static final short EDITABLE_DATA_COLOR = IndexedColors.GREY_50_PERCENT.getIndex();
 
   private final ExcelExportConfig config;
 
@@ -250,7 +255,7 @@ public final class ExcelGenerator {
     try {
       return createHeaderStyle(workbook, parseHexColor(hex));
     } catch (NumberFormatException e) {
-      LOG.warn("Invalid NoneEditableHeaderColor '{}', falling back to the default light gray", hex, e);
+      LOG.warn("Invalid NoneEditableHeaderColor '{}', falling back to the default yellow", hex, e);
       return createHeaderStyle(workbook, DEFAULT_NON_EDITABLE_HEADER_COLOR);
     }
   }
@@ -337,6 +342,17 @@ public final class ExcelGenerator {
       this.unlockedDateTime = createStyle(workbook, false, dateTimeFormat);
     }
 
+    private static CellStyle createStyle(SXSSFWorkbook workbook, boolean locked, String numberFormat) {
+      CellStyle style = workbook.createCellStyle();
+      style.setLocked(locked);
+      style.setFillForegroundColor(locked ? NON_EDITABLE_DATA_COLOR : EDITABLE_DATA_COLOR);
+      style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+      if (numberFormat != null) {
+        style.setDataFormat(workbook.createDataFormat().getFormat(numberFormat));
+      }
+      return style;
+    }
+
     CellStyle styleFor(int columnType, boolean editable) {
       switch (columnType) {
         case Types.DATE:
@@ -346,15 +362,6 @@ public final class ExcelGenerator {
         default:
           return editable ? unlockedPlain : lockedPlain;
       }
-    }
-
-    private static CellStyle createStyle(SXSSFWorkbook workbook, boolean locked, String numberFormat) {
-      CellStyle style = workbook.createCellStyle();
-      style.setLocked(locked);
-      if (numberFormat != null) {
-        style.setDataFormat(workbook.createDataFormat().getFormat(numberFormat));
-      }
-      return style;
     }
   }
 }
