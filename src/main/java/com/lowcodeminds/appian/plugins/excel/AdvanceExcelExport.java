@@ -1,12 +1,13 @@
 package com.lowcodeminds.appian.plugins.excel;
 
 import com.appiancorp.suiteapi.common.Name;
+import com.appiancorp.suiteapi.common.exceptions.AppianStorageException;
 import com.appiancorp.suiteapi.common.exceptions.PrivilegeException;
 import com.appiancorp.suiteapi.common.exceptions.StorageLimitException;
 import com.appiancorp.suiteapi.content.Content;
 import com.appiancorp.suiteapi.content.ContentConstants;
-import com.appiancorp.suiteapi.content.ContentOutputStream;
 import com.appiancorp.suiteapi.content.ContentService;
+import com.appiancorp.suiteapi.content.ContentUploadOutputStream;
 import com.appiancorp.suiteapi.content.exceptions.DuplicateUuidException;
 import com.appiancorp.suiteapi.content.exceptions.InsufficientNameUniquenessException;
 import com.appiancorp.suiteapi.content.exceptions.InvalidContentException;
@@ -305,21 +306,14 @@ public class AdvanceExcelExport extends AppianSmartService {
   }
 
   /**
-   * ContentService.upload()/ContentOutputStream are marked @Deprecated in the SDK, but
-   * Document.write(InputStream)/getOutputStream() - the only non-deprecated alternatives -
-   * delegate to a private documentHelper field that is only populated by the Appian engine
-   * on framework-returned Document instances. Calling them on a plugin-constructed Document
-   * NPEs. upload() remains the only working path for plugins to push byte content, so the
-   * deprecation warning is intentionally suppressed here.
-   *
-   * <p>If a document named {@code NewDocumentName.xlsx} already exists directly in the
+   * If a document named {@code NewDocumentName.xlsx} already exists directly in the
    * target folder, this overwrites it by uploading a new version onto that existing
    * content id instead of creating a sibling. Otherwise it creates a new document.
    */
-  @SuppressWarnings("deprecation")
   private Long saveAsDocument(byte[] excelBytes, ExcelExportConfig config)
       throws InvalidContentException, StorageLimitException, PrivilegeException,
-      InsufficientNameUniquenessException, DuplicateUuidException, IOException {
+      InsufficientNameUniquenessException, DuplicateUuidException, AppianStorageException,
+      IOException {
     Long existingDocumentId = findExistingDocumentId(config);
 
     Document document = new Document();
@@ -336,9 +330,10 @@ public class AdvanceExcelExport extends AppianSmartService {
     }
 
     Long newDocumentId;
-    try (ContentOutputStream contentOutputStream = contentService.upload(document, uploadMode)) {
-      contentOutputStream.write(excelBytes);
-      newDocumentId = contentOutputStream.getContentId();
+    try (ContentUploadOutputStream contentUploadOutputStream =
+        contentService.uploadDocument(document, uploadMode)) {
+      contentUploadOutputStream.write(excelBytes);
+      newDocumentId = contentUploadOutputStream.getContentId();
     }
     return newDocumentId;
   }
