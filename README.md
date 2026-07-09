@@ -178,11 +178,13 @@ the `SQLSheetData[]` CDT design described above.
 
 ## Known caveat
 
-`AdvanceExcelExport` uses `ContentService.upload()` /
-`ContentOutputStream` to save the generated file, even though the SDK marks
-both `@Deprecated`. The non-deprecated alternative
-(`Document.write(InputStream)` / `getOutputStream()`) delegates to an
-internal `documentHelper` field that the Appian engine only populates on
-framework-returned `Document` instances - calling it on a plugin-constructed
-`Document` throws `NullPointerException`. `upload()` remains the only working
-path for plugins to push byte content in this SDK version.
+`AdvanceExcelExport` uses `ContentService.uploadDocument()` /
+`ContentUploadOutputStream` to save the generated file. An earlier version used
+the now-deprecated `ContentService.upload()` / `ContentOutputStream` pair,
+based on the mistaken assumption that `Document.write(InputStream)` /
+`getOutputStream()` was the only non-deprecated alternative (that path
+delegates to an internal `documentHelper` field the Appian engine only
+populates on framework-returned `Document` instances, so it throws
+`NullPointerException` on a plugin-constructed `Document`). An Appian AppMarket
+reviewer pointed out `uploadDocument()` as the correct, non-deprecated
+replacement, and the code was switched over accordingly.

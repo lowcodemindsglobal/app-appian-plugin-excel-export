@@ -61,7 +61,7 @@ public final class ExcelExportConfig {
 
   /**
    * @return the hex fill color for non-editable column headers, or null if none was
-   *     supplied (in which case a default light gray is used - see ExcelGenerator)
+   *     supplied (in which case a default yellow is used - see ExcelGenerator)
    */
   public String getNonEditableHeaderColor() {
     return nonEditableHeaderColor;

@@ -176,7 +176,7 @@ public class AdvanceExcelExport extends AppianSmartService {
   }
 
   // Fill color for non-editable column headers. Editable column headers always use
-  // a fixed darker gray instead - there's no input to override that side.
+  // a fixed yellow instead - there's no input to override that side.
   @Input(required = Required.OPTIONAL)
   @Name("NoneEditableHeaderColor")
   public void setNonEditableHeaderColor(String nonEditableHeaderColor) {
